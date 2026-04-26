@@ -1,6 +1,6 @@
 import {select} from '@inquirer/prompts'
 
-export type MenuChoice = 'config' | 'exit' | 'models' | 'models-detail'
+export type MenuChoice = 'config' | 'exit' | 'models' | 'models-detail' | 'objects'
 
 export async function mainMenu(): Promise<MenuChoice> {
   return select({
@@ -8,6 +8,7 @@ export async function mainMenu(): Promise<MenuChoice> {
     choices: [
       {name: 'List models', value: 'models' as const},
       {name: 'List models (detail)', value: 'models-detail' as const},
+      {name: 'List objects in model', value: 'objects' as const},
       {name: 'Configuration', value: 'config' as const},
       {name: 'Exit', value: 'exit' as const},
     ],

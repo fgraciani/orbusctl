@@ -92,6 +92,108 @@ export async function fetchModelDetailCounts(token: string, modelIds: string[]):
   return new Map(entries)
 }
 
+export interface OrbusObject {
+  LastModifiedBy: {Name: string}
+  LastModifiedDate: string
+  Name: string
+  ObjectId: string
+  ObjectType: {Name: string}
+}
+
+interface ObjectsResponse {
+  value: OrbusObject[]
+}
+
+export async function fetchObjects(token: string, modelId: string): Promise<OrbusObject[]> {
+  const all: OrbusObject[] = []
+  let skip = 0
+
+  for (;;) {
+    const url = `${BASE_URL}/odata/Objects?$filter=ModelId eq ${modelId}&$select=ObjectId,Name,LastModifiedDate&$expand=ObjectType($select=Name),LastModifiedBy($select=Name)&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {
+      headers: {Authorization: `Bearer ${token}`},
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch objects (HTTP ${response.status})`)
+    }
+
+    const data = (await response.json()) as ObjectsResponse
+    all.push(...data.value)
+
+    if (data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
+
+  return all
+}
+
+export interface AttributeValue {
+  AttributeName: string
+  StringValue: string | null
+  Value?: boolean | number | string | null
+}
+
+export interface RelatedObject {
+  DirectionDescription: string
+  RelatedItem: {Name: string; ObjectId: string; ObjectType: {Name: string}}
+  Relationship: {RelationshipType: {Name: string}}
+}
+
+export interface ObjectDetail {
+  AttributeValues: AttributeValue[]
+  CreatedBy: {Name: string}
+  DateCreated: string
+  Detail: {CurrentVersionNumber: number; OriginalObjectId: string | null; Status: string}
+  LastModifiedBy: {Name: string}
+  LastModifiedDate: string
+  LockedBy: {Name: string} | null
+  LockedOn: string | null
+  Model: {Name: string}
+  Name: string
+  ObjectId: string
+  ObjectType: {Description: string; Name: string}
+}
+
+export async function fetchObjectDetail(token: string, objectId: string): Promise<ObjectDetail> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Objects(${objectId})?$expand=ObjectType,AttributeValues,Detail,CreatedBy,LastModifiedBy,LockedBy,Model`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch object detail (HTTP ${response.status})`)
+  }
+
+  return (await response.json()) as ObjectDetail
+}
+
+export async function fetchObjectRelationships(token: string, objectId: string): Promise<RelatedObject[]> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Objects(${objectId})?$select=ObjectId&$expand=RelatedObjects($expand=RelatedItem($select=Name,ObjectId;$expand=ObjectType($select=Name)),Relationship($expand=RelationshipType($select=Name)))`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch relationships (HTTP ${response.status})`)
+  }
+
+  const data = (await response.json()) as {RelatedObjects: RelatedObject[]}
+  return data.RelatedObjects ?? []
+}
+
+export async function fetchObjectModelName(token: string, objectId: string): Promise<string | null> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Objects(${objectId})?$select=ObjectId&$expand=Model($select=Name)`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+
+  if (!response.ok) return null
+
+  const data = (await response.json()) as {Model: {Name: string}}
+  return data.Model?.Name ?? null
+}
+
 export async function fetchSolutions(token: string): Promise<Solution[]> {
   const response = await fetch(`${BASE_URL}/odata/Solutions?$select=SolutionId,Name`, {
     headers: {Authorization: `Bearer ${token}`},

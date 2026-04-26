@@ -1,11 +1,12 @@
 import {input, select} from '@inquirer/prompts'
 import {Command} from '@oclif/core'
 
-import {fetchMe, fetchModelDetailCounts, fetchModels, fetchSolutions} from '../api'
+import {type Model, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects, fetchSolutions} from '../api'
 import {getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveShowHiddenModels, saveSolutionFilter} from '../config'
 import {banner} from '../ui/banner'
 import {mainMenu} from '../ui/menu'
-import {formatModelTree} from '../ui/tree'
+import {formatObjectDetail} from '../ui/table'
+import {buildModelChoices, formatModelTree} from '../ui/tree'
 
 export default class Index extends Command {
   static description = 'Orbus Administration CLI'
@@ -143,6 +144,100 @@ export default class Index extends Command {
             this.log()
           } catch {
             this.log('  Failed to fetch models. Token may have expired.')
+            this.log()
+          }
+
+          break
+        }
+
+        case 'objects': {
+          const token = getToken()
+          if (!token) {
+            this.log()
+            this.log('  No token configured. Please set an authentication token first.')
+            this.log()
+            break
+          }
+
+          const filter = getSolutionFilter()
+          this.log()
+          this.log('  Fetching models...')
+
+          try {
+            const allModels = await fetchModels(token, filter)
+            const showHidden = getShowHiddenModels()
+            const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+
+            const model = await select<Model | null>({
+              message: 'Select a model:',
+              choices: [
+                {name: '← Back to menu', value: null},
+                ...buildModelChoices(models),
+              ],
+              pageSize: 20,
+            })
+
+            if (!model) break
+
+            this.log()
+            this.log(`  Fetching objects for "${model.Name}"...`)
+
+            const objects = await fetchObjects(token, model.ModelId)
+            this.log(`  Found ${objects.length} object(s).`)
+            this.log()
+
+            const sorted = [...objects].sort((a, b) =>
+              a.ObjectType.Name.localeCompare(b.ObjectType.Name) || a.Name.localeCompare(b.Name),
+            )
+            const maxName = Math.max(...sorted.map((o) => o.Name.length))
+            const maxType = Math.max(...sorted.map((o) => o.ObjectType.Name.length))
+            const maxModBy = Math.max(...sorted.map((o) => o.LastModifiedBy.Name.length))
+            const objectChoices = [
+              {name: '← Back to menu', value: ''},
+              ...sorted.map((o) => {
+                const date = new Date(o.LastModifiedDate).toLocaleDateString('en-GB')
+                return {
+                  name: `${o.Name.padEnd(maxName)}   ${o.ObjectType.Name.padEnd(maxType)}   ${o.LastModifiedBy.Name.padEnd(maxModBy)}   ${date}`,
+                  value: o.ObjectId,
+                }
+              }),
+            ]
+
+            let lastPicked = ''
+            for (;;) {
+              const picked = await select({
+                message: 'Select an object for details (or go back):',
+                choices: objectChoices,
+                default: lastPicked || undefined,
+                pageSize: 20,
+              })
+
+              if (!picked) break
+              lastPicked = picked
+
+              this.log()
+              this.log('  Fetching object details...')
+
+              const [detail, relationships] = await Promise.all([
+                fetchObjectDetail(token, picked),
+                fetchObjectRelationships(token, picked),
+              ])
+
+              let originalModelName: string | null = null
+              if (detail.Detail.Status !== 'Original' && detail.Detail.OriginalObjectId) {
+                originalModelName = await fetchObjectModelName(token, detail.Detail.OriginalObjectId)
+              }
+
+              this.log()
+
+              for (const line of formatObjectDetail(detail, originalModelName, relationships)) {
+                this.log(line)
+              }
+
+              this.log()
+            }
+          } catch {
+            this.log('  Failed to fetch objects. Token may have expired.')
             this.log()
           }
 

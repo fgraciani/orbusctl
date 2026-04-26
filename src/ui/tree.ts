@@ -30,6 +30,33 @@ function buildTree(models: Model[]): TreeNode[] {
   return toNodes(null)
 }
 
+export interface ModelChoice {
+  name: string
+  value: Model
+}
+
+export function buildModelChoices(models: Model[]): ModelChoice[] {
+  const choices: ModelChoice[] = []
+  const tree = buildTree(models)
+
+  function walk(nodes: TreeNode[], prefix: string, isRoot: boolean): void {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      const isLast = i === nodes.length - 1
+      const connector = isRoot ? '' : (isLast ? '└── ' : '├── ')
+      choices.push({name: `${prefix}${connector}${node.model.Name}`, value: node.model})
+
+      if (node.children.length > 0) {
+        const childPrefix = isRoot ? prefix : prefix + (isLast ? '    ' : '│   ')
+        walk(node.children, childPrefix, false)
+      }
+    }
+  }
+
+  walk(tree, '', true)
+  return choices
+}
+
 export function formatModelTree(models: Model[], detailCounts?: Map<string, ModelCounts>): string[] {
   const lines: string[] = []
   const tree = buildTree(models)
