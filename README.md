@@ -6,7 +6,7 @@ This is not an official Orbus tool.
 
 ## Status
 
-**v0.2.1** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, and configuration management.
+**v0.3.0** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, ArchiMate colour coding, version check, and configuration management.
 
 ## Prerequisites
 
@@ -77,6 +77,21 @@ Selecting an object shows a boxed detail card with:
 - All non-empty attributes
 - Relationships with direction, related object name and type, and relationship type
 
+### ArchiMate colour coding
+
+Object types are colour-coded in the terminal based on the ArchiMate 3.2 layer colours:
+
+| Layer | Standard colour | Hex | Terminal colour |
+|---|---|---|---|
+| **Strategy** | Cream/tan | `#F5DEAA` | Bright yellow |
+| **Business** | Yellow | `#FFFFB5` | Yellow |
+| **Application** | Light blue | `#B5FFFF` | Cyan |
+| **Technology** | Green | `#C9E7B7` | Green |
+| **Physical** | Green | `#C9E7B7` | Bright green |
+| **Motivation** | Lavender | `#CCCCFF` | Magenta |
+| **Implementation & Migration** | Pink/salmon | `#FFE0E0` | Red |
+| **Composite** | Grey | `#E0E0E0` | White |
+
 ### Subcommands (for scripts and LLMs)
 
 Every feature is also available as a non-interactive subcommand:
@@ -101,6 +116,9 @@ orbusctl config --solution ""        # clear filter, show all models
 orbusctl config --show-hidden        # include deactivated models
 orbusctl config --no-show-hidden     # hide deactivated models
 orbusctl config --reset              # reset to defaults
+
+# Version and update check
+orbusctl version
 
 # Help
 orbusctl --help

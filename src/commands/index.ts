@@ -5,8 +5,10 @@ import {type Model, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDet
 import {getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveShowHiddenModels, saveSolutionFilter} from '../config'
 import {banner} from '../ui/banner'
 import {mainMenu} from '../ui/menu'
+import {colorType} from '../ui/colors'
 import {formatObjectDetail} from '../ui/table'
 import {buildModelChoices, formatModelTree} from '../ui/tree'
+import {checkForUpdate, getLocalVersion} from '../update'
 
 export default class Index extends Command {
   static description = 'Orbus Administration CLI'
@@ -40,6 +42,14 @@ export default class Index extends Command {
     this.log()
     this.log('  Orbus Administration CLI - by francisco.graciani')
     this.log()
+
+    const local = getLocalVersion()
+    const remote = await checkForUpdate()
+    if (remote && remote !== local) {
+      this.log(`  Update available: v${local} → v${remote}`)
+      this.log('  Run: npm install -g github:fgraciani/orbusctl')
+      this.log()
+    }
 
     const savedToken = getToken()
     const savedUser = getUser()
@@ -197,7 +207,7 @@ export default class Index extends Command {
               ...sorted.map((o) => {
                 const date = new Date(o.LastModifiedDate).toLocaleDateString('en-GB')
                 return {
-                  name: `${o.Name.padEnd(maxName)}   ${o.ObjectType.Name.padEnd(maxType)}   ${o.LastModifiedBy.Name.padEnd(maxModBy)}   ${date}`,
+                  name: `${o.Name.padEnd(maxName)}   ${colorType(o.ObjectType.Name.padEnd(maxType))}   ${o.LastModifiedBy.Name.padEnd(maxModBy)}   ${date}`,
                   value: o.ObjectId,
                 }
               }),

@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.2.1
+## Current version: 0.3.0
 
 ## API
 
@@ -51,13 +51,16 @@ src/
     models.ts     orbusctl models
     objects.ts    orbusctl objects
     config.ts     orbusctl config
+    version.ts    orbusctl version
   ui/             Terminal presentation
     banner.ts     ASCII logo
+    colors.ts     ArchiMate 3.2 layer colour coding for object types
     menu.ts       Interactive menu choices
     table.ts      Object table and boxed detail card (uses boxen)
     tree.ts       Model hierarchy tree formatter and model chooser
   api.ts          All API calls (fetch functions)
   config.ts       Config file read/write (~/.orbusctl/config.json)
+  update.ts       Version check against GitHub remote
 ```
 
 ## Rules
@@ -66,6 +69,7 @@ src/
 - Keep the implementation boring, clean, and minimal.
 - API calls go in src/api.ts, not in commands.
 - Config access goes through src/config.ts functions, not direct file reads.
+- Before committing, always update README.md and CLAUDE.md to reflect any new features, commands, files, or API endpoints.
 
 ## Subcommands (for scripts and LLMs)
 
@@ -97,6 +101,9 @@ orbusctl config --solution ""               # clear filter, show all models
 orbusctl config --show-hidden               # include deactivated models
 orbusctl config --no-show-hidden            # hide deactivated models
 orbusctl config --reset                     # reset to defaults
+
+# Version and update check
+orbusctl version
 
 # Environment variable override (token only, for CI/scripts)
 ORBUS_TOKEN=<token> orbusctl models

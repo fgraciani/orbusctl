@@ -1,6 +1,7 @@
 import boxen = require('boxen')
 
 import {ObjectDetail, OrbusObject, RelatedObject} from '../api'
+import {colorType} from './colors'
 
 export function formatObjectTable(objects: OrbusObject[]): string[] {
   const sorted = [...objects].sort((a, b) => a.Name.localeCompare(b.Name))
@@ -117,7 +118,7 @@ export function formatObjectDetail(obj: ObjectDetail, originalModelName?: string
 
   contentLines.push(`Object ID:      ${obj.ObjectId}`)
   contentLines.push(`Model:          ${obj.Model.Name}`)
-  contentLines.push(`Type:           ${obj.ObjectType.Name}`)
+  contentLines.push(`Type:           ${colorType(obj.ObjectType.Name)}`)
   const sourceHints: Record<string, string> = {
     Original: 'created in this model',
     Reuse: 'linked from another model, stays in sync',
@@ -161,7 +162,7 @@ export function formatObjectDetail(obj: ObjectDetail, originalModelName?: string
     contentLines.push(`Relationships (${sorted.length}):`)
     for (const rel of sorted) {
       const relType = rel.RelatedItem.ObjectType?.Name
-      contentLines.push(`  ${rel.DirectionDescription.padEnd(maxDir)}  ${rel.RelatedItem.Name}${relType ? ` (${relType})` : ''}  [${rel.Relationship.RelationshipType.Name}]`)
+      contentLines.push(`  ${rel.DirectionDescription.padEnd(maxDir)}  ${rel.RelatedItem.Name}${relType ? ` (${colorType(relType)})` : ''}  [${rel.Relationship.RelationshipType.Name}]`)
     }
   } else if (relationships && relationships.length === 0) {
     contentLines.push('')
