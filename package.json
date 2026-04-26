@@ -1,0 +1,40 @@
+{
+  "name": "orbusctl",
+  "version": "0.1.0",
+  "author": "Francisco Graciani",
+  "description": "Orbus Administration CLI",
+  "main": "dist/index.js",
+  "bin": {
+    "orbusctl": "./bin/run.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "mocha --config .mocharc.json",
+    "start": "./bin/run.js"
+  },
+  "oclif": {
+    "bin": "orbusctl",
+    "commands": "./dist/commands",
+    "topicSeparator": " "
+  },
+  "files": [
+    "/bin",
+    "/dist"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^8.4.2",
+    "@oclif/core": "^4"
+  },
+  "devDependencies": {
+    "@oclif/test": "^4",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10",
+    "@types/node": "^22",
+    "chai": "^6.2.2",
+    "mocha": "^11",
+    "ts-node": "^10",
+    "typescript": "^5"
+  }
+}
