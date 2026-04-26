@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.3.0
+## Current version: 0.4.0
 
 ## API
 
@@ -32,6 +32,15 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - Direct object lookup: `/odata/Objects(<uuid>)` — returns object directly, not wrapped in `value` array
 - Nested expands: `$expand=RelatedObjects($expand=RelatedItem($select=Name;$expand=ObjectType($select=Name)))`
 
+### Activity tracking notes
+
+- Objects support server-side date filtering: `$filter=DateCreated gt <iso> or LastModifiedDate gt <iso>`
+- Relationships do NOT support date filtering — use `$orderby=DateCreated desc` and stop paging when past cutoff
+- No audit log, activity feed, or user-list endpoints exist in the API
+- Users are discovered from `CreatedBy`/`LastModifiedBy` on objects/relationships
+- Activity reports are auto-saved as markdown to `~/.orbusctl/reports/`
+- The activity command is password-protected (scrypt hash embedded in source code)
+
 ### Object detail notes
 
 - Object descriptions live in `AttributeValues` (AttributeName: "Description"), not as a direct field
@@ -52,7 +61,9 @@ src/
     objects.ts    orbusctl objects
     config.ts     orbusctl config
     version.ts    orbusctl version
+    activity.ts   orbusctl activity (admin-only activity report)
   ui/             Terminal presentation
+    activity.ts   Activity report formatting (terminal + markdown)
     banner.ts     ASCII logo
     colors.ts     ArchiMate 3.2 layer colour coding for object types
     menu.ts       Interactive menu choices
@@ -104,6 +115,12 @@ orbusctl config --reset                     # reset to defaults
 
 # Version and update check
 orbusctl version
+
+# Activity report (admin only — requires password)
+orbusctl activity --password <pw>                # last 7 days (default)
+orbusctl activity --password <pw> --days 30      # last 30 days
+orbusctl activity --password <pw> --hours 24     # last 24 hours
+orbusctl activity --password <pw> --user "GRACIANI"  # filter by user
 
 # Environment variable override (token only, for CI/scripts)
 ORBUS_TOKEN=<token> orbusctl models

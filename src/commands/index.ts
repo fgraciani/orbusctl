@@ -1,14 +1,27 @@
-import {input, select} from '@inquirer/prompts'
+import {writeFileSync} from 'node:fs'
+import {scryptSync, timingSafeEqual} from 'node:crypto'
+import {join} from 'node:path'
+
+import {input, password, select} from '@inquirer/prompts'
 import {Command} from '@oclif/core'
 
-import {type Model, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects, fetchSolutions} from '../api'
-import {getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveShowHiddenModels, saveSolutionFilter} from '../config'
+import {type ActivityObject, type ActivityRelationship, type Model, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects, fetchRecentObjects, fetchRecentRelationships, fetchSolutions} from '../api'
+import {getReportsDir, getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveShowHiddenModels, saveSolutionFilter} from '../config'
+import {type ActivityReport, buildModelActivityChoices, formatActivityReportMarkdown, formatActivitySummary, formatModelActivity} from '../ui/activity'
 import {banner} from '../ui/banner'
-import {mainMenu} from '../ui/menu'
 import {colorType} from '../ui/colors'
+import {mainMenu} from '../ui/menu'
 import {formatObjectDetail} from '../ui/table'
 import {buildModelChoices, formatModelTree} from '../ui/tree'
 import {checkForUpdate, getLocalVersion} from '../update'
+
+const ADMIN_SALT = '8c4c4904a54b3b7b841d1e2e36761208'
+const ADMIN_HASH = 'fdbddc27e1c36f54a6835448acea75f13ffe696df0e77e5fca23638042e9689c5333b724c23e6cb91d15cf2e23685f46324d79578ed48c8b3d9b12f2c703b56d'
+
+function verifyAdmin(password: string): boolean {
+  const hash = scryptSync(password, ADMIN_SALT, 64)
+  return timingSafeEqual(hash, Buffer.from(ADMIN_HASH, 'hex'))
+}
 
 export default class Index extends Command {
   static description = 'Orbus Administration CLI'
@@ -248,6 +261,121 @@ export default class Index extends Command {
             }
           } catch {
             this.log('  Failed to fetch objects. Token may have expired.')
+            this.log()
+          }
+
+          break
+        }
+
+        case 'activity': {
+          const token = getToken()
+          if (!token) {
+            this.log()
+            this.log('  No token configured. Please set an authentication token first.')
+            this.log()
+            break
+          }
+
+          const pw = await password({message: 'Admin password:', mask: '*'})
+          if (!verifyAdmin(pw)) {
+            this.log()
+            this.log('  Access denied.')
+            this.log()
+            break
+          }
+
+          const period = await select({
+            message: 'Select time period:',
+            choices: [
+              {name: 'Last 24 hours', value: 24},
+              {name: 'Last 7 days', value: 7 * 24},
+              {name: 'Last 30 days', value: 30 * 24},
+              {name: '← Back to menu', value: 0},
+            ],
+          })
+
+          if (period === 0) break
+
+          const now = new Date()
+          const since = new Date(now.getTime() - period * 60 * 60 * 1000)
+          const label = period === 24 ? 'last 24 hours' : period === 7 * 24 ? 'last 7 days' : 'last 30 days'
+
+          const filter = getSolutionFilter()
+          this.log()
+          if (filter) {
+            this.log(`  Fetching models (filtered by "${filter}")...`)
+          } else {
+            this.log('  Fetching all models...')
+          }
+
+          try {
+            const allModels = await fetchModels(token, filter)
+            const showHidden = getShowHiddenModels()
+            const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+            this.log(`  Found ${models.length} model(s). Scanning activity...`)
+
+            const objectsByModel = new Map<string, ActivityObject[]>()
+            const relationshipsByModel = new Map<string, ActivityRelationship[]>()
+
+            for (const model of models) {
+              try {
+                const [objects, relationships] = await Promise.all([
+                  fetchRecentObjects(token, model.ModelId, since.toISOString()),
+                  fetchRecentRelationships(token, model.ModelId, since.toISOString()),
+                ])
+
+                if (objects.length > 0) objectsByModel.set(model.ModelId, objects)
+                if (relationships.length > 0) relationshipsByModel.set(model.ModelId, relationships)
+
+                const total = objects.length + relationships.length
+                if (total > 0) {
+                  this.log(`  ${model.Name}: ${objects.length} object(s), ${relationships.length} relationship(s)`)
+                }
+              } catch (error) {
+                if (error instanceof Error && error.message === 'TOKEN_EXPIRED') {
+                  this.log('  Token expired mid-scan. Showing partial results.')
+                  break
+                }
+                this.log(`  Failed to scan "${model.Name}".`)
+              }
+            }
+
+            const report: ActivityReport = {label, models, objectsByModel, relationshipsByModel, since, until: now}
+
+            for (const line of formatActivitySummary(report)) {
+              this.log(line)
+            }
+
+            const md = formatActivityReportMarkdown(report)
+            const datePart = now.toISOString().slice(0, 10)
+            const windowPart = period === 24 ? '24h' : period === 7 * 24 ? '7d' : '30d'
+            const fileName = `activity_${datePart}_${windowPart}.md`
+            const filePath = join(getReportsDir(), fileName)
+            writeFileSync(filePath, md)
+            this.log(`  Report saved to ${filePath}`)
+            this.log()
+
+            const modelChoices = buildModelActivityChoices(report)
+            if (modelChoices.length > 0) {
+              for (;;) {
+                const picked = await select({
+                  message: 'Inspect a model (or go back):',
+                  choices: [
+                    {name: '← Back to menu', value: ''},
+                    ...modelChoices,
+                  ],
+                  pageSize: 20,
+                })
+
+                if (!picked) break
+
+                for (const line of formatModelActivity(report, picked)) {
+                  this.log(line)
+                }
+              }
+            }
+          } catch {
+            this.log('  Failed to generate activity report. Token may have expired.')
             this.log()
           }
 

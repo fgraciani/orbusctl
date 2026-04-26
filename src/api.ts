@@ -207,6 +207,93 @@ export async function fetchSolutions(token: string): Promise<Solution[]> {
   return data.value
 }
 
+export interface ActivityObject {
+  CreatedBy: {Name: string}
+  DateCreated: string
+  LastModifiedBy: {Name: string}
+  LastModifiedDate: string
+  ModelId: string
+  Name: string
+  ObjectId: string
+  ObjectType: {Name: string}
+}
+
+interface ActivityObjectsResponse {
+  value: ActivityObject[]
+}
+
+export async function fetchRecentObjects(token: string, modelId: string, since: string): Promise<ActivityObject[]> {
+  const all: ActivityObject[] = []
+  let skip = 0
+  const sinceISO = new Date(since).toISOString()
+
+  for (;;) {
+    const filter = `ModelId eq ${modelId} and (DateCreated gt ${sinceISO} or LastModifiedDate gt ${sinceISO})`
+    const url = `${BASE_URL}/odata/Objects?$filter=${filter}&$select=ObjectId,Name,DateCreated,LastModifiedDate,ModelId&$expand=ObjectType($select=Name),CreatedBy($select=Name),LastModifiedBy($select=Name)&$orderby=LastModifiedDate desc&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {
+      headers: {Authorization: `Bearer ${token}`},
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('TOKEN_EXPIRED')
+      throw new Error(`Failed to fetch recent objects (HTTP ${response.status})`)
+    }
+
+    const data = (await response.json()) as ActivityObjectsResponse
+    all.push(...data.value)
+
+    if (data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
+
+  return all
+}
+
+export interface ActivityRelationship {
+  CreatedBy: {Name: string}
+  DateCreated: string
+  ModelId: string
+  RelationshipId: string
+}
+
+interface ActivityRelationshipsResponse {
+  value: ActivityRelationship[]
+}
+
+export async function fetchRecentRelationships(token: string, modelId: string, since: string): Promise<ActivityRelationship[]> {
+  const all: ActivityRelationship[] = []
+  let skip = 0
+  const cutoff = new Date(since).getTime()
+
+  for (;;) {
+    const url = `${BASE_URL}/odata/Relationships?$filter=ModelId eq ${modelId}&$select=RelationshipId,DateCreated,ModelId&$expand=CreatedBy($select=Name)&$orderby=DateCreated desc&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {
+      headers: {Authorization: `Bearer ${token}`},
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) throw new Error('TOKEN_EXPIRED')
+      throw new Error(`Failed to fetch recent relationships (HTTP ${response.status})`)
+    }
+
+    const data = (await response.json()) as ActivityRelationshipsResponse
+
+    let reachedCutoff = false
+    for (const rel of data.value) {
+      if (new Date(rel.DateCreated).getTime() <= cutoff) {
+        reachedCutoff = true
+        break
+      }
+      all.push(rel)
+    }
+
+    if (reachedCutoff || data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
+
+  return all
+}
+
 export async function fetchMe(token: string): Promise<MeResponse> {
   const response = await fetch(`${BASE_URL}/odata/Me`, {
     headers: {Authorization: `Bearer ${token}`},

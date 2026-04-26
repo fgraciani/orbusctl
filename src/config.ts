@@ -4,6 +4,7 @@ import {join} from 'node:path'
 
 const CONFIG_DIR = join(homedir(), '.orbusctl')
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json')
+const REPORTS_DIR = join(CONFIG_DIR, 'reports')
 
 export interface UserInfo {
   name: string
@@ -79,4 +80,11 @@ export function saveAuth(token: string, user: UserInfo): void {
   config.token = token
   config.user = user
   writeConfig(config)
+}
+
+export function getReportsDir(): string {
+  if (!existsSync(REPORTS_DIR)) {
+    mkdirSync(REPORTS_DIR, {recursive: true})
+  }
+  return REPORTS_DIR
 }
