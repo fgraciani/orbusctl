@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.1.0
+## Current version: 0.2.1
 
 ## API
 
@@ -19,8 +19,9 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - `GET /odata/Me` — validate token, returns user name and email
 - `GET /odata/Models` — list models; supports `$top`, `$skip`, `$filter`, `$select`, `includeDeactivated`; max 50 per page
 - `GET /odata/Solutions` — list solutions (used for filtering models)
-- `GET /odata/Objects` — list objects; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only
-- `GET /odata/Relationships` — list relationships; same filtering and count pattern as Objects
+- `GET /odata/Objects` — list objects; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; max 50 per page
+- `GET /odata/Objects({key})` — get single object by ID; supports `$expand` for ObjectType, AttributeValues, Detail, CreatedBy, LastModifiedBy, LockedBy, Model, RelatedObjects
+- `GET /odata/Relationships` — list relationships; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only
 
 ### OData patterns
 
@@ -28,6 +29,17 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - Count without data: `$count=true&$top=0` returns `@odata.count` in the response
 - Filter models by solution: `$filter=Solutions/any(s: s/Name eq 'ArchiMate 3.1')`
 - Filter objects/relationships by model: `$filter=ModelId eq <uuid>`
+- Direct object lookup: `/odata/Objects(<uuid>)` — returns object directly, not wrapped in `value` array
+- Nested expands: `$expand=RelatedObjects($expand=RelatedItem($select=Name;$expand=ObjectType($select=Name)))`
+
+### Object detail notes
+
+- Object descriptions live in `AttributeValues` (AttributeName: "Description"), not as a direct field
+- `Detail.Status` is the object source: "Original", "Reuse", or "Variant"
+- `Detail.OriginalObjectId` points to the original object for Reuse/Variant — use it to look up the source model
+- System attributes to filter from display: Name, Description, iServer365 Id, Created By, Date Created, Date Last Modified, Last Modified By, Metamodel Item Id, Metamodel Item Name
+- `LockedOn`/`LockedBy` indicate content locks — show in red when locked
+- `RelatedObjects` expand returns relationships with DirectionDescription, RelatedItem, and Relationship.RelationshipType
 
 ## Architecture
 
@@ -37,11 +49,13 @@ src/
     index.ts      Interactive menu (default when no subcommand given)
     auth.ts       orbusctl auth
     models.ts     orbusctl models
+    objects.ts    orbusctl objects
     config.ts     orbusctl config
   ui/             Terminal presentation
     banner.ts     ASCII logo
     menu.ts       Interactive menu choices
-    tree.ts       Model hierarchy tree formatter
+    table.ts      Object table and boxed detail card (uses boxen)
+    tree.ts       Model hierarchy tree formatter and model chooser
   api.ts          All API calls (fetch functions)
   config.ts       Config file read/write (~/.orbusctl/config.json)
 ```
@@ -67,6 +81,12 @@ orbusctl models
 
 # List models with object and relationship counts
 orbusctl models --detail
+
+# List objects in a model (partial name match)
+orbusctl objects --model "Airports"
+
+# Show full details for a specific object
+orbusctl objects --model "Airports" --object "DWH"
 
 # Show current config
 orbusctl config
