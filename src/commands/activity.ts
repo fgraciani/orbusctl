@@ -19,6 +19,8 @@ function verifyAdmin(password: string): boolean {
 export default class Activity extends Command {
   static description = 'Show user activity report (admin only)'
 
+  static enableJsonFlag = true
+
   static flags = {
     days: Flags.integer({char: 'd', description: 'Look back N days (default: 7)'}),
     hours: Flags.integer({char: 'H', description: 'Look back N hours (overrides --days)'}),
@@ -26,7 +28,7 @@ export default class Activity extends Command {
     user: Flags.string({char: 'u', description: 'Filter by user name (partial match)'}),
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<Record<string, unknown>> {
     const {flags} = await this.parse(Activity)
 
     const password = flags.password ?? process.env.ORBUS_ADMIN_KEY
@@ -90,6 +92,53 @@ export default class Activity extends Command {
     const filePath = join(getReportsDir(), fileName)
     writeFileSync(filePath, md)
     this.log(`  Report saved to ${filePath}`)
+
+    let objectsCreated = 0
+    let objectsModified = 0
+    let relationshipsCreated = 0
+    for (const objs of report.objectsByModel.values()) {
+      for (const o of objs) {
+        if (new Date(o.DateCreated) >= report.since) objectsCreated++
+        if (new Date(o.LastModifiedDate) >= report.since && new Date(o.DateCreated) < report.since) objectsModified++
+      }
+    }
+    for (const rels of report.relationshipsByModel.values()) {
+      relationshipsCreated += rels.length
+    }
+
+    const activityModels = []
+    for (const model of report.models) {
+      const objs = report.objectsByModel.get(model.ModelId)
+      const rels = report.relationshipsByModel.get(model.ModelId)
+      if (!objs && !rels) continue
+      activityModels.push({
+        modelId: model.ModelId,
+        name: model.Name,
+        objects: (objs ?? []).map((o) => ({
+          createdBy: o.CreatedBy.Name,
+          dateCreated: o.DateCreated,
+          lastModifiedBy: o.LastModifiedBy.Name,
+          lastModifiedDate: o.LastModifiedDate,
+          name: o.Name,
+          objectId: o.ObjectId,
+          objectType: o.ObjectType.Name,
+        })),
+        relationships: (rels ?? []).map((r) => ({
+          createdBy: r.CreatedBy.Name,
+          dateCreated: r.DateCreated,
+          relationshipId: r.RelationshipId,
+        })),
+      })
+    }
+
+    return {
+      label: report.label,
+      models: activityModels,
+      reportPath: filePath,
+      since: report.since.toISOString(),
+      summary: {objectsCreated, objectsModified, relationshipsCreated},
+      until: report.until.toISOString(),
+    }
   }
 
   private filterByUser(report: ActivityReport, userFilter: string): void {

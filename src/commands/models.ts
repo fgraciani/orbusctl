@@ -4,14 +4,25 @@ import {fetchModelDetailCounts, fetchModels} from '../api'
 import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {formatModelTree} from '../ui/tree'
 
+interface ModelJson {
+  baselineModelId: string | null
+  counts?: {objects: number; relationships: number}
+  description: string
+  isHidden: boolean
+  modelId: string
+  name: string
+}
+
 export default class Models extends Command {
   static description = 'List models from the Orbus repository'
+
+  static enableJsonFlag = true
 
   static flags = {
     detail: Flags.boolean({char: 'd', description: 'Show object and relationship counts per model'}),
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<{models: ModelJson[]}> {
     const {flags} = await this.parse(Models)
     const token = getToken()
     if (!token) {
@@ -41,6 +52,23 @@ export default class Models extends Command {
 
     for (const line of formatModelTree(models, counts)) {
       this.log(line)
+    }
+
+    return {
+      models: models.map((m) => {
+        const json: ModelJson = {
+          baselineModelId: m.BaselineModelId,
+          description: m.Description,
+          isHidden: m.IsHidden,
+          modelId: m.ModelId,
+          name: m.Name,
+        }
+        if (counts) {
+          const c = counts.get(m.ModelId)
+          if (c) json.counts = c
+        }
+        return json
+      }),
     }
   }
 }

@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.4.0
+## Current version: 0.5.0
 
 ## API
 
@@ -74,6 +74,10 @@ src/
   update.ts       Version check against GitHub remote
 ```
 
+### JSON output
+
+All subcommands (except the interactive menu) support `--json` via oclif's built-in `enableJsonFlag`. When active, `this.log()` and `this.warn()` are suppressed and the return value of `run()` is serialized as JSON to stdout. Each command returns camelCase keys. Maps are converted to arrays.
+
 ## Rules
 
 - Keep command logic (src/commands/) separate from terminal presentation code (src/ui/).
@@ -124,6 +128,16 @@ orbusctl activity --password <pw> --user "GRACIANI"  # filter by user
 
 # Environment variable override (token only, for CI/scripts)
 ORBUS_TOKEN=<token> orbusctl models
+
+# JSON output (add --json to any command for machine-readable output)
+orbusctl version --json
+orbusctl auth --token <bearer-token> --json
+orbusctl config --json
+orbusctl models --json
+orbusctl models --detail --json
+orbusctl objects --model "Airports" --json
+orbusctl objects --model "Airports" --object "DWH" --json
+orbusctl activity --password <pw> --json
 ```
 
 ## Config file

@@ -5,7 +5,9 @@ import {checkForUpdate, getLocalVersion} from '../update'
 export default class Version extends Command {
   static description = 'Show version and check for updates'
 
-  async run(): Promise<void> {
+  static enableJsonFlag = true
+
+  async run(): Promise<{latestVersion: string | null; updateAvailable: boolean; version: string}> {
     const local = getLocalVersion()
     this.log(`orbusctl v${local}`)
     this.log()
@@ -17,6 +19,12 @@ export default class Version extends Command {
       this.log('Run: npm install -g github:fgraciani/orbusctl')
     } else {
       this.log('You are on the latest version.')
+    }
+
+    return {
+      latestVersion: remote ?? null,
+      updateAvailable: Boolean(remote && remote !== local),
+      version: local,
     }
   }
 }

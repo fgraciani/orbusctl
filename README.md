@@ -6,7 +6,7 @@ This is not an official Orbus tool.
 
 ## Status
 
-**v0.3.0** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, ArchiMate colour coding, version check, and configuration management.
+**v0.5.0** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, ArchiMate colour coding, version check, configuration management, and machine-readable JSON output on all commands.
 
 ## Prerequisites
 
@@ -124,6 +124,31 @@ orbusctl version
 orbusctl --help
 orbusctl models --help
 orbusctl objects --help
+```
+
+### JSON output (for scripts and LLMs)
+
+Add `--json` to any subcommand for machine-readable JSON output. Progress messages are suppressed and only clean JSON is written to stdout.
+
+```sh
+orbusctl version --json
+orbusctl auth --token <bearer-token> --json
+orbusctl config --json
+orbusctl models --json
+orbusctl models --detail --json
+orbusctl objects --model "Airports" --json
+orbusctl objects --model "Airports" --object "DWH" --json
+orbusctl activity --password <pw> --json
+```
+
+Example:
+
+```sh
+# Pipe model data to jq for filtering
+orbusctl models --detail --json | jq '.models[] | select(.counts.objects > 100)'
+
+# Get all objects as JSON for analysis
+orbusctl objects --model "Airports" --json | jq '.objects'
 ```
 
 ### Authentication

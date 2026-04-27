@@ -11,15 +11,21 @@ export default class Auth extends Command {
 
   static description = 'Set authentication token'
 
+  static enableJsonFlag = true
+
   static flags = {
     token: Flags.string({char: 't', description: 'Bearer token to validate and save'}),
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<{accountName: string; emailAddress: string; name: string}> {
     const {args, flags} = await this.parse(Auth)
     let token = flags.token ?? args.token
 
     if (!token) {
+      if (this.jsonEnabled()) {
+        this.error('Token is required in JSON mode. Use --token or pass as argument.')
+      }
+
       token = await input({message: 'Enter your bearer token:'})
     }
 
@@ -33,5 +39,11 @@ export default class Auth extends Command {
     })
     this.log(`Authenticated as ${me.Name} (${me.EmailAddress}).`)
     this.log('Token saved to ~/.orbusctl/config.json.')
+
+    return {
+      accountName: me.AccountName,
+      emailAddress: me.EmailAddress,
+      name: me.Name,
+    }
   }
 }
