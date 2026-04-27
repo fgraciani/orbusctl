@@ -6,7 +6,7 @@ import {formatModelTree} from '../ui/tree'
 
 interface ModelJson {
   baselineModelId: string | null
-  counts?: {objects: number; relationships: number}
+  counts?: {drawings: number; objects: number; relationships: number}
   description: string
   isHidden: boolean
   modelId: string
@@ -44,7 +44,7 @@ export default class Models extends Command {
 
     let counts: Map<string, import('../api').ModelCounts> | undefined
     if (flags.detail) {
-      this.log('Fetching object and relationship counts...')
+      this.log('Fetching object, relationship, and drawing counts...')
       counts = await fetchModelDetailCounts(token, models.map((m) => m.ModelId))
     }
 

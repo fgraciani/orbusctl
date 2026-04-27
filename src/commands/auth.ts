@@ -26,6 +26,8 @@ export default class Auth extends Command {
         this.error('Token is required in JSON mode. Use --token or pass as argument.')
       }
 
+      this.log('Get your token at: https://eurocontrol-api.iserver365.com/oapi2/swagger/index.html')
+      this.log()
       token = await input({message: 'Enter your bearer token:'})
     }
 

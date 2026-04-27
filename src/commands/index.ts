@@ -5,12 +5,14 @@ import {join} from 'node:path'
 import {input, password, select} from '@inquirer/prompts'
 import {Command} from '@oclif/core'
 
-import {type ActivityObject, type ActivityRelationship, type Model, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects, fetchRecentObjects, fetchRecentRelationships, fetchSolutions} from '../api'
-import {getReportsDir, getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveShowHiddenModels, saveSolutionFilter} from '../config'
+import {type ActivityObject, type ActivityRelationship, type Model, fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchDrawingsContainingObject, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectNameAndType, fetchObjectRelationships, fetchObjects, fetchRecentObjects, fetchRecentRelationships, fetchRelationshipEndpoints, fetchSolutions} from '../api'
+import {getBannerColor, getExportsDir, getReportsDir, getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveBannerColor, saveShowHiddenModels, saveSolutionFilter} from '../config'
+import {performExport} from './export'
 import {type ActivityReport, buildModelActivityChoices, formatActivityReportMarkdown, formatActivitySummary, formatModelActivity} from '../ui/activity'
-import {banner} from '../ui/banner'
+import {colorBanner} from '../ui/banner'
 import {colorType} from '../ui/colors'
 import {mainMenu} from '../ui/menu'
+import {buildDrawingChoices, formatDrawingDetail} from '../ui/drawings'
 import {formatObjectDetail} from '../ui/table'
 import {buildModelChoices, formatModelTree} from '../ui/tree'
 import {checkForUpdate, getLocalVersion} from '../update'
@@ -23,10 +25,14 @@ function verifyAdmin(password: string): boolean {
   return timingSafeEqual(hash, Buffer.from(ADMIN_HASH, 'hex'))
 }
 
+
 export default class Index extends Command {
   static description = 'Orbus Administration CLI'
 
+
   async promptForToken(): Promise<boolean> {
+    this.log('  Get your token at: https://eurocontrol-api.iserver365.com/oapi2/swagger/index.html')
+    this.log()
     const token = await input({message: 'Enter your bearer token:'})
     this.log()
     this.log('  Validating token...')
@@ -51,7 +57,17 @@ export default class Index extends Command {
 
   async run(): Promise<void> {
     await this.parse(Index)
-    this.log(banner)
+
+    if (process.argv.includes('--colors')) {
+      for (let i = 0; i < 256; i++) {
+        this.log(colorBanner(`38;5;${i}`))
+        this.log(`  \x1b[38;5;${i}m${i}\x1b[0m`)
+        this.log()
+      }
+      return
+    }
+
+    this.log(colorBanner(`38;5;${getBannerColor() ?? Math.floor(Math.random() * 256)}`))
     this.log()
     this.log('  Orbus Administration CLI - by francisco.graciani')
     this.log()
@@ -59,7 +75,7 @@ export default class Index extends Command {
     const local = getLocalVersion()
     const remote = await checkForUpdate()
     if (remote && remote !== local) {
-      this.log(`  Update available: v${local} → v${remote}`)
+      this.log(`  \x1b[31;5mUpdate available:\x1b[25m v${local} → v${remote}\x1b[0m`)
       this.log('  Run: npm install -g github:fgraciani/orbusctl')
       this.log()
     }
@@ -155,7 +171,7 @@ export default class Index extends Command {
             const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
             const hiddenCount = allModels.length - models.length
             this.log(`  Found ${models.length} model(s).${hiddenCount > 0 ? ` (${hiddenCount} deactivated hidden)` : ''}`)
-            this.log('  Fetching object and relationship counts...')
+            this.log('  Fetching object, relationship, and drawing counts...')
 
             const counts = await fetchModelDetailCounts(token, models.map((m) => m.ModelId))
             this.log()
@@ -191,8 +207,223 @@ export default class Index extends Command {
             const showHidden = getShowHiddenModels()
             const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
 
+            for (;;) {
+              const model = await select<Model | null>({
+                message: 'Select a model:',
+                choices: [
+                  {name: '← Back to menu', value: null},
+                  ...buildModelChoices(models),
+                ],
+                pageSize: 20,
+              })
+
+              if (!model) break
+
+              this.log()
+              this.log(`  Fetching objects for "${model.Name}"...`)
+
+              const objects = await fetchObjects(token, model.ModelId)
+              this.log(`  Found ${objects.length} object(s).`)
+              this.log()
+
+              const sorted = [...objects].sort((a, b) =>
+                a.ObjectType.Name.localeCompare(b.ObjectType.Name) || a.Name.localeCompare(b.Name),
+              )
+              const maxName = Math.max(...sorted.map((o) => o.Name.length))
+              const maxType = Math.max(...sorted.map((o) => o.ObjectType.Name.length))
+              const maxModBy = Math.max(...sorted.map((o) => o.LastModifiedBy.Name.length))
+              const objectChoices = [
+                {name: '← Back to model list', value: ''},
+                ...sorted.map((o) => {
+                  const date = new Date(o.LastModifiedDate).toLocaleDateString('en-GB')
+                  return {
+                    name: `${o.Name.padEnd(maxName)}   ${colorType(o.ObjectType.Name.padEnd(maxType))}   ${o.LastModifiedBy.Name.padEnd(maxModBy)}   ${date}`,
+                    value: o.ObjectId,
+                  }
+                }),
+              ]
+
+              let lastPicked = ''
+              for (;;) {
+                const picked = await select({
+                  message: 'Select an object for details (or go back):',
+                  choices: objectChoices,
+                  default: lastPicked || undefined,
+                  pageSize: 20,
+                })
+
+                if (!picked) break
+                lastPicked = picked
+
+                this.log()
+                this.log('  Fetching object details...')
+
+                const [detail, relationships, drawings] = await Promise.all([
+                  fetchObjectDetail(token, picked),
+                  fetchObjectRelationships(token, picked),
+                  fetchDrawingsContainingObject(token, model.ModelId, picked),
+                ])
+
+                let originalModelName: string | null = null
+                if (detail.Detail.Status !== 'Original' && detail.Detail.OriginalObjectId) {
+                  originalModelName = await fetchObjectModelName(token, detail.Detail.OriginalObjectId)
+                }
+
+                this.log()
+
+                for (const line of formatObjectDetail(detail, originalModelName, relationships, drawings)) {
+                  this.log(line)
+                }
+
+                this.log()
+              }
+            }
+          } catch {
+            this.log('  Failed to fetch objects. Token may have expired.')
+            this.log()
+          }
+
+          break
+        }
+
+        case 'drawings': {
+          const token = getToken()
+          if (!token) {
+            this.log()
+            this.log('  No token configured. Please set an authentication token first.')
+            this.log()
+            break
+          }
+
+          const filter = getSolutionFilter()
+          this.log()
+          this.log('  Fetching models...')
+
+          try {
+            const allModels = await fetchModels(token, filter)
+            const showHidden = getShowHiddenModels()
+            const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+
+            for (;;) {
+              const model = await select<Model | null>({
+                message: 'Select a model:',
+                choices: [
+                  {name: '← Back to menu', value: null},
+                  ...buildModelChoices(models),
+                ],
+                pageSize: 20,
+              })
+
+              if (!model) break
+
+              this.log()
+              this.log(`  Fetching drawings for "${model.Name}"...`)
+
+              const [docTypes, drawings] = await Promise.all([
+                fetchDocumentTypes(token),
+                fetchDrawings(token, model.ModelId),
+              ])
+
+              const typeMap = new Map(docTypes.map((t) => [t.DocumentTypeId, t.Name]))
+
+              const componentCounts = new Map<string, number | null>()
+              await Promise.all(
+                drawings.map(async (d) => {
+                  try {
+                    const components = await fetchDrawingComponents(token, d.DocumentId)
+                    componentCounts.set(d.DocumentId, components.length)
+                  } catch {
+                    componentCounts.set(d.DocumentId, null)
+                  }
+                }),
+              )
+
+              this.log(`  Found ${drawings.length} drawing(s).`)
+              this.log()
+
+              const drawingChoices = buildDrawingChoices(drawings, typeMap, componentCounts)
+
+              let lastPicked = ''
+              for (;;) {
+                const picked = await select({
+                  message: 'Select a drawing for details (or go back):',
+                  choices: [
+                    {name: '← Back to model list', value: ''},
+                    ...drawingChoices,
+                  ],
+                  default: lastPicked || undefined,
+                  pageSize: 20,
+                })
+
+                if (!picked) break
+                lastPicked = picked
+
+                this.log()
+                this.log('  Fetching drawing components...')
+
+                const components = await fetchDrawingComponents(token, picked)
+                const drawing = drawings.find((d) => d.DocumentId === picked)!
+                const typeName = typeMap.get(drawing.DocumentTypeId) ?? 'Unknown'
+
+                const objectComponents = components.filter((c) => !c.isRelationship)
+                const relationshipComponents = components.filter((c) => c.isRelationship)
+                const nameMap = new Map<string, {name: string; typeName: string}>()
+                const relMap = new Map<string, {fromName: string; toName: string}>()
+                await Promise.all([
+                  ...objectComponents.map(async (c) => {
+                    nameMap.set(c.ModelItemId, await fetchObjectNameAndType(token, c.ModelItemId))
+                  }),
+                  ...relationshipComponents.map(async (c) => {
+                    const endpoints = await fetchRelationshipEndpoints(token, c.ModelItemId)
+                    if (endpoints) relMap.set(c.ModelItemId, endpoints)
+                  }),
+                ])
+                const enriched = components.map((c) => {
+                  if (c.isRelationship) {
+                    const endpoints = relMap.get(c.ModelItemId)
+                    return {...c, fromName: endpoints?.fromName ?? null, toName: endpoints?.toName ?? null}
+                  }
+                  const info = nameMap.get(c.ModelItemId)
+                  return {...c, objectName: info?.name ?? c.objectName, objectTypeName: info?.typeName ?? c.objectTypeName}
+                })
+
+                this.log()
+
+                for (const line of formatDrawingDetail(drawing.FileName, typeName, drawing.DocumentAccessibilityCategory, enriched)) {
+                  this.log(line)
+                }
+
+                this.log()
+              }
+            }
+          } catch {
+            this.log('  Failed to fetch drawings. Token may have expired.')
+            this.log()
+          }
+
+          break
+        }
+
+        case 'export': {
+          const token = getToken()
+          if (!token) {
+            this.log()
+            this.log('  No token configured. Please set an authentication token first.')
+            this.log()
+            break
+          }
+
+          const filter = getSolutionFilter()
+          this.log()
+          this.log('  Fetching models...')
+
+          try {
+            const allModels = await fetchModels(token, filter)
+            const showHidden = getShowHiddenModels()
+            const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+
             const model = await select<Model | null>({
-              message: 'Select a model:',
+              message: 'Select a model to export:',
               choices: [
                 {name: '← Back to menu', value: null},
                 ...buildModelChoices(models),
@@ -202,65 +433,36 @@ export default class Index extends Command {
 
             if (!model) break
 
-            this.log()
-            this.log(`  Fetching objects for "${model.Name}"...`)
+            const mode = await select<boolean | null>({
+              message: 'Export mode:',
+              choices: [
+                {name: 'Full details  (all attributes — slower)', value: true},
+                {name: 'Fast mode    (Name, Id, Type only)', value: false},
+                {name: '← Back to model list', value: null},
+              ],
+            })
 
-            const objects = await fetchObjects(token, model.ModelId)
-            this.log(`  Found ${objects.length} object(s).`)
-            this.log()
+            if (mode === null) break
 
-            const sorted = [...objects].sort((a, b) =>
-              a.ObjectType.Name.localeCompare(b.ObjectType.Name) || a.Name.localeCompare(b.Name),
+            this.log()
+            this.log(`  Exporting "${model.Name}"...`)
+            this.log('  Fetching objects, relationships, and drawings...')
+
+            const result = await performExport(
+              token,
+              model,
+              mode,
+              getExportsDir(),
+              (current, total) => process.stderr.write(`\r  Fetching object details (${current}/${total})...`),
             )
-            const maxName = Math.max(...sorted.map((o) => o.Name.length))
-            const maxType = Math.max(...sorted.map((o) => o.ObjectType.Name.length))
-            const maxModBy = Math.max(...sorted.map((o) => o.LastModifiedBy.Name.length))
-            const objectChoices = [
-              {name: '← Back to menu', value: ''},
-              ...sorted.map((o) => {
-                const date = new Date(o.LastModifiedDate).toLocaleDateString('en-GB')
-                return {
-                  name: `${o.Name.padEnd(maxName)}   ${colorType(o.ObjectType.Name.padEnd(maxType))}   ${o.LastModifiedBy.Name.padEnd(maxModBy)}   ${date}`,
-                  value: o.ObjectId,
-                }
-              }),
-            ]
 
-            let lastPicked = ''
-            for (;;) {
-              const picked = await select({
-                message: 'Select an object for details (or go back):',
-                choices: objectChoices,
-                default: lastPicked || undefined,
-                pageSize: 20,
-              })
-
-              if (!picked) break
-              lastPicked = picked
-
-              this.log()
-              this.log('  Fetching object details...')
-
-              const [detail, relationships] = await Promise.all([
-                fetchObjectDetail(token, picked),
-                fetchObjectRelationships(token, picked),
-              ])
-
-              let originalModelName: string | null = null
-              if (detail.Detail.Status !== 'Original' && detail.Detail.OriginalObjectId) {
-                originalModelName = await fetchObjectModelName(token, detail.Detail.OriginalObjectId)
-              }
-
-              this.log()
-
-              for (const line of formatObjectDetail(detail, originalModelName, relationships)) {
-                this.log(line)
-              }
-
-              this.log()
-            }
-          } catch {
-            this.log('  Failed to fetch objects. Token may have expired.')
+            if (mode) process.stderr.write('\n')
+            this.log(`  ${result.objects} object(s), ${result.relationships} relationship(s), ${result.drawings} drawing(s).`)
+            this.log()
+            this.log(`  Saved to ${result.filePath}`)
+            this.log()
+          } catch (error) {
+            this.log(`  Export failed: ${error instanceof Error ? error.message : String(error)}`)
             this.log()
           }
 
@@ -387,6 +589,7 @@ export default class Index extends Command {
           const user = getUser()
           const filter = getSolutionFilter()
           const showHidden = getShowHiddenModels()
+          const bannerColor = getBannerColor()
 
           this.log()
           this.log('  Current configuration:')
@@ -395,6 +598,7 @@ export default class Index extends Command {
           this.log(`    Token:           ${token ? `${token.slice(0, 20)}... (${token.length} chars)` : 'Not set'}`)
           this.log(`    Solution filter: ${filter ?? 'None (showing all models)'}`)
           this.log(`    Hidden models:   ${showHidden ? 'Shown' : 'Hidden'}`)
+          this.log(`    Banner color:    ${bannerColor !== undefined ? `\x1b[38;5;${bannerColor}m${bannerColor}\x1b[0m` : 'random'}`)
           this.log()
 
           const action = await select({
@@ -404,6 +608,8 @@ export default class Index extends Command {
               {name: 'Select a solution filter', value: 'change' as const},
               {name: 'Clear solution filter (show all models)', value: 'clear' as const},
               {name: `${showHidden ? 'Hide' : 'Show'} deactivated models`, value: 'toggle-hidden' as const},
+              {name: 'Set banner color (0-255)', value: 'banner-color' as const},
+              {name: 'Use random banner color', value: 'random-banner' as const},
               {name: 'Reset to defaults', value: 'reset' as const},
               {name: 'Back to menu', value: 'back' as const},
             ],
@@ -420,6 +626,30 @@ export default class Index extends Command {
             saveShowHiddenModels(!showHidden)
             this.log()
             this.log(`  Deactivated models will now be ${showHidden ? 'hidden' : 'shown'}.`)
+            this.log()
+            break
+          }
+
+          if (action === 'banner-color') {
+            const raw = await input({message: 'Enter a color number (0-255):'})
+            const n = Number.parseInt(raw, 10)
+            if (Number.isNaN(n) || n < 0 || n > 255) {
+              this.log()
+              this.log('  Invalid color. Enter a number between 0 and 255.')
+              this.log()
+            } else {
+              saveBannerColor(n)
+              this.log()
+              this.log(`  Banner color set to \x1b[38;5;${n}m${n}\x1b[0m.`)
+              this.log()
+            }
+            break
+          }
+
+          if (action === 'random-banner') {
+            saveBannerColor(undefined)
+            this.log()
+            this.log('  Banner color set to random.')
             this.log()
             break
           }

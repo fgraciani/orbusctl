@@ -63,6 +63,7 @@ interface CountResponse {
 export interface ModelCounts {
   objects: number
   relationships: number
+  drawings: number
 }
 
 async function fetchCount(token: string, entity: string, modelId: string): Promise<number> {
@@ -82,11 +83,12 @@ async function fetchCount(token: string, entity: string, modelId: string): Promi
 export async function fetchModelDetailCounts(token: string, modelIds: string[]): Promise<Map<string, ModelCounts>> {
   const entries = await Promise.all(
     modelIds.map(async (id) => {
-      const [objects, relationships] = await Promise.all([
+      const [objects, relationships, drawings] = await Promise.all([
         fetchCount(token, 'Objects', id),
         fetchCount(token, 'Relationships', id),
+        fetchCount(token, 'Documents', id),
       ])
-      return [id, {objects, relationships}] as const
+      return [id, {objects, relationships, drawings}] as const
     }),
   )
   return new Map(entries)
@@ -292,6 +294,198 @@ export async function fetchRecentRelationships(token: string, modelId: string, s
   }
 
   return all
+}
+
+export interface Drawing {
+  DocumentId: string
+  FileName: string
+  DocumentTypeId: string
+  DocumentAccessibilityCategory: string | null
+}
+
+export interface DocumentType {
+  DocumentTypeId: string
+  Name: string
+}
+
+export interface DrawingComponent {
+  ComponentId: string
+  ModelItemId: string
+  RepresentationSituationId: number | null
+  objectName: string | null
+  objectTypeName: string | null
+  isRelationship: boolean
+  relationshipKind: 'Connector' | 'Containment' | 'Overlap' | null
+  fromName: string | null
+  toName: string | null
+}
+
+interface DrawingsResponse {
+  value: Drawing[]
+}
+
+interface DocumentTypesResponse {
+  value: DocumentType[]
+}
+
+interface RawComponent {
+  ComponentId: string
+  ModelItemId: string
+  RepresentationSituationId: number | null
+}
+
+export async function fetchDocumentTypes(token: string): Promise<DocumentType[]> {
+  const all: DocumentType[] = []
+  let skip = 0
+
+  for (;;) {
+    const url = `${BASE_URL}/odata/DocumentTypes?$select=DocumentTypeId,Name&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {headers: {Authorization: `Bearer ${token}`}})
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch document types (HTTP ${response.status})`)
+    }
+
+    const data = (await response.json()) as DocumentTypesResponse
+    all.push(...data.value)
+
+    if (data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
+
+  return all
+}
+
+export async function fetchDrawings(token: string, modelId: string): Promise<Drawing[]> {
+  const all: Drawing[] = []
+  let skip = 0
+
+  for (;;) {
+    const url = `${BASE_URL}/odata/Documents?$filter=ModelId eq ${modelId}&$select=DocumentId,FileName,DocumentTypeId,DocumentAccessibilityCategory&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {headers: {Authorization: `Bearer ${token}`}})
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch drawings (HTTP ${response.status})`)
+    }
+
+    const data = (await response.json()) as DrawingsResponse
+    all.push(...data.value)
+
+    if (data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
+
+  return all
+}
+
+export async function fetchDrawingCount(token: string, modelId: string): Promise<number> {
+  return fetchCount(token, 'Documents', modelId)
+}
+
+export async function fetchDrawingComponents(token: string, documentId: string): Promise<DrawingComponent[]> {
+  const url = `${BASE_URL}/odata/Documents(${documentId})?$expand=Components($select=ComponentId,ModelItemId,RepresentationSituationId)`
+  const response = await fetch(url, {headers: {Authorization: `Bearer ${token}`}})
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch drawing components (HTTP ${response.status})`)
+  }
+
+  const data = (await response.json()) as {Components: RawComponent[]}
+  return (data.Components ?? []).map((raw): DrawingComponent => {
+    const sit = raw.RepresentationSituationId
+    if (sit === 1) {
+      return {ComponentId: raw.ComponentId, ModelItemId: raw.ModelItemId, RepresentationSituationId: sit, objectName: null, objectTypeName: null, isRelationship: true, relationshipKind: 'Connector', fromName: null, toName: null}
+    }
+    if (sit === 2) {
+      return {ComponentId: raw.ComponentId, ModelItemId: raw.ModelItemId, RepresentationSituationId: sit, objectName: null, objectTypeName: null, isRelationship: true, relationshipKind: 'Containment', fromName: null, toName: null}
+    }
+    if (sit === 3) {
+      return {ComponentId: raw.ComponentId, ModelItemId: raw.ModelItemId, RepresentationSituationId: sit, objectName: null, objectTypeName: null, isRelationship: true, relationshipKind: 'Overlap', fromName: null, toName: null}
+    }
+    return {ComponentId: raw.ComponentId, ModelItemId: raw.ModelItemId, RepresentationSituationId: sit, objectName: null, objectTypeName: null, isRelationship: false, relationshipKind: null, fromName: null, toName: null}
+  })
+}
+
+export async function fetchRelationshipEndpoints(
+  token: string,
+  relationshipId: string,
+): Promise<{fromName: string; toName: string} | null> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Relationships(${relationshipId})?$expand=LeadObject($select=Name),MemberObject($select=Name)`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+  if (!response.ok) return null
+  const data = (await response.json()) as {LeadObject?: {Name: string}; MemberObject?: {Name: string}}
+  if (!data.LeadObject?.Name || !data.MemberObject?.Name) return null
+  return {fromName: data.LeadObject.Name, toName: data.MemberObject.Name}
+}
+
+export async function fetchObjectNameAndType(token: string, objectId: string): Promise<{name: string; typeName: string}> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Objects(${objectId})?$select=Name&$expand=ObjectType($select=Name)`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+  if (!response.ok) return {name: 'Unknown', typeName: 'Unknown'}
+  const data = (await response.json()) as {Name: string; ObjectType: {Name: string}}
+  return {name: data.Name ?? 'Unknown', typeName: data.ObjectType?.Name ?? 'Unknown'}
+}
+
+export interface ExportRelationship {
+  RelationshipId: string
+  DateCreated: string
+  AttributeValues?: AttributeValue[]
+  CreatedBy: {Name: string}
+  LeadObject: {Name: string; ObjectId: string; ObjectType: {Name: string}} | null
+  MemberObject: {Name: string; ObjectId: string; ObjectType: {Name: string}} | null
+  RelationshipType: {Name: string} | null
+}
+
+interface ExportRelationshipsResponse {
+  value: ExportRelationship[]
+}
+
+export async function fetchAllRelationships(token: string, modelId: string): Promise<ExportRelationship[]> {
+  const all: ExportRelationship[] = []
+  let skip = 0
+
+  for (;;) {
+    const url = `${BASE_URL}/odata/Relationships?$filter=ModelId eq ${modelId}&$select=RelationshipId,DateCreated&$expand=RelationshipType($select=Name),LeadObject($select=Name,ObjectId;$expand=ObjectType($select=Name)),MemberObject($select=Name,ObjectId;$expand=ObjectType($select=Name)),CreatedBy($select=Name),AttributeValues&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {
+      headers: {Authorization: `Bearer ${token}`},
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch relationships (HTTP ${response.status})`)
+    }
+
+    const data = (await response.json()) as ExportRelationshipsResponse
+    all.push(...data.value)
+
+    if (data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
+
+  return all
+}
+
+export async function fetchDrawingsContainingObject(
+  token: string,
+  modelId: string,
+  objectId: string,
+): Promise<Array<{documentId: string; fileName: string}>> {
+  const drawings = await fetchDrawings(token, modelId)
+
+  const results = await Promise.all(
+    drawings.map(async (d) => {
+      const url = `${BASE_URL}/odata/Documents(${d.DocumentId})?$select=DocumentId&$expand=Components($filter=ModelItemId eq ${objectId};$select=ComponentId;$top=1)`
+      const response = await fetch(url, {headers: {Authorization: `Bearer ${token}`}})
+      if (!response.ok) return null
+      const data = (await response.json()) as {Components: unknown[]}
+      return data.Components?.length > 0 ? {documentId: d.DocumentId, fileName: d.FileName} : null
+    }),
+  )
+
+  return results.filter((r): r is {documentId: string; fileName: string} => r !== null)
 }
 
 export async function fetchMe(token: string): Promise<MeResponse> {

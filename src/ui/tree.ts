@@ -66,7 +66,7 @@ export function formatModelTree(models: Model[], detailCounts?: Map<string, Mode
     if (detailCounts) {
       const counts = detailCounts.get(model.ModelId)
       if (counts) {
-        label += ` (${counts.objects} objects, ${counts.relationships} relationships)`
+        label += ` (${counts.objects} objects, ${counts.relationships} relationships, ${counts.drawings} drawings)`
       }
     }
 

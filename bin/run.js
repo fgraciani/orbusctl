@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_NOT_FOUND
 
 async function main() {
-  if (process.argv.length === 2) {
+  if (process.argv.length === 2 || process.argv.includes('--colors')) {
     // No subcommand given — run interactive mode
     const Index = require('../dist/commands/index').default
     await Index.run([])

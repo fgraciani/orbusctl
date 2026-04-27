@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.5.0
+## Current version: 0.6.0
 
 ## API
 
@@ -21,7 +21,10 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - `GET /odata/Solutions` — list solutions (used for filtering models)
 - `GET /odata/Objects` — list objects; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; max 50 per page
 - `GET /odata/Objects({key})` — get single object by ID; supports `$expand` for ObjectType, AttributeValues, Detail, CreatedBy, LastModifiedBy, LockedBy, Model, RelatedObjects
-- `GET /odata/Relationships` — list relationships; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only
+- `GET /odata/Relationships` — list relationships; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; supports `$expand` for RelationshipType, LeadObject, MemberObject, CreatedBy
+- `GET /odata/Documents` — list drawings; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; max 50 per page
+- `GET /odata/Documents({key})` — get single document; supports `$expand=Components($expand=Object(...),Relationship(...))`
+- `GET /odata/DocumentTypes` — list document types; supports `$select`, `$top`, `$skip`
 
 ### OData patterns
 
@@ -31,6 +34,9 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - Filter objects/relationships by model: `$filter=ModelId eq <uuid>`
 - Direct object lookup: `/odata/Objects(<uuid>)` — returns object directly, not wrapped in `value` array
 - Nested expands: `$expand=RelatedObjects($expand=RelatedItem($select=Name;$expand=ObjectType($select=Name)))`
+- Filter documents by model: `$filter=ModelId eq <uuid>` — only returns Draw documents (Visio docs have null ModelId)
+- Drawing components expand: `$expand=Components($expand=Object($select=Name;$expand=ObjectType($select=Name)),Relationship($select=RelationshipTypeId))`
+- `RepresentationSituationId` in Components: 0/null = Object, 1 = Connector, 2 = Containment, 3 = Overlap
 
 ### Activity tracking notes
 
@@ -59,6 +65,8 @@ src/
     auth.ts       orbusctl auth
     models.ts     orbusctl models
     objects.ts    orbusctl objects
+    drawings.ts   orbusctl drawings
+    export.ts     orbusctl export (Excel export of objects, relationships, drawings)
     config.ts     orbusctl config
     version.ts    orbusctl version
     activity.ts   orbusctl activity (admin-only activity report)
@@ -66,6 +74,7 @@ src/
     activity.ts   Activity report formatting (terminal + markdown)
     banner.ts     ASCII logo
     colors.ts     ArchiMate 3.2 layer colour coding for object types
+    drawings.ts   Drawing table, boxed detail card, and picker choices
     menu.ts       Interactive menu choices
     table.ts      Object table and boxed detail card (uses boxen)
     tree.ts       Model hierarchy tree formatter and model chooser
@@ -98,7 +107,7 @@ orbusctl auth --token <bearer-token>
 # List models (uses saved config for filters)
 orbusctl models
 
-# List models with object and relationship counts
+# List models with object, relationship, and drawing counts
 orbusctl models --detail
 
 # List objects in a model (partial name match)
@@ -106,6 +115,17 @@ orbusctl objects --model "Airports"
 
 # Show full details for a specific object
 orbusctl objects --model "Airports" --object "DWH"
+
+# List drawings in a model (partial name match)
+orbusctl drawings --model "EA Practice"
+
+# Show components of a specific drawing
+orbusctl drawings --model "EA Practice" --drawing "2025 EA Objectives"
+
+# Export model to Excel (objects + relationships + drawings sheets)
+orbusctl export --model "EA Practice"
+orbusctl export --model "EA Practice" --no-details          # fast: Name/Id/Type only
+orbusctl export --model "EA Practice" --output ~/Desktop    # custom output directory
 
 # Show current config
 orbusctl config
@@ -137,7 +157,11 @@ orbusctl models --json
 orbusctl models --detail --json
 orbusctl objects --model "Airports" --json
 orbusctl objects --model "Airports" --object "DWH" --json
+orbusctl drawings --model "EA Practice" --json
+orbusctl drawings --model "EA Practice" --drawing "2025 EA Objectives" --json
 orbusctl activity --password <pw> --json
+orbusctl export --model "EA Practice" --json
+orbusctl export --model "EA Practice" --no-details --json
 ```
 
 ## Config file

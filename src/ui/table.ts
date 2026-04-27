@@ -76,7 +76,12 @@ function wrapText(text: string, width: number): string[] {
   return result
 }
 
-export function formatObjectDetail(obj: ObjectDetail, originalModelName?: string | null, relationships?: RelatedObject[]): string[] {
+export function formatObjectDetail(
+  obj: ObjectDetail,
+  originalModelName?: string | null,
+  relationships?: RelatedObject[],
+  drawings?: Array<{documentId: string; fileName: string}>,
+): string[] {
   const date = (s: string) => {
     const d = new Date(s)
     return `${d.toLocaleDateString('en-GB')} ${d.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}`
@@ -167,6 +172,18 @@ export function formatObjectDetail(obj: ObjectDetail, originalModelName?: string
   } else if (relationships && relationships.length === 0) {
     contentLines.push('')
     contentLines.push('No relationships.')
+  }
+
+  if (drawings !== undefined) {
+    contentLines.push('')
+    if (drawings.length > 0) {
+      contentLines.push(`Appears in drawings (${drawings.length}):`)
+      for (const d of drawings.sort((a, b) => a.fileName.localeCompare(b.fileName))) {
+        contentLines.push(`  ${d.fileName}`)
+      }
+    } else {
+      contentLines.push('Not found in any drawings.')
+    }
   }
 
   const box = boxen(contentLines.join('\n'), {

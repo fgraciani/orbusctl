@@ -5,6 +5,7 @@ import {join} from 'node:path'
 const CONFIG_DIR = join(homedir(), '.orbusctl')
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json')
 const REPORTS_DIR = join(CONFIG_DIR, 'reports')
+const EXPORTS_DIR = join(CONFIG_DIR, 'exports')
 
 export interface UserInfo {
   name: string
@@ -15,6 +16,7 @@ export interface UserInfo {
 const DEFAULT_SOLUTION_FILTER = 'ArchiMate 3.1'
 
 interface Config {
+  bannerColor?: number
   showHiddenModels?: boolean
   solutionFilter?: string
   token?: string
@@ -68,8 +70,23 @@ export function saveSolutionFilter(solutionFilter: string | undefined): void {
   writeConfig(config)
 }
 
+export function getBannerColor(): number | undefined {
+  return readConfig().bannerColor
+}
+
+export function saveBannerColor(color: number | undefined): void {
+  const config = readConfig()
+  if (color === undefined) {
+    delete config.bannerColor
+  } else {
+    config.bannerColor = color
+  }
+  writeConfig(config)
+}
+
 export function resetSettings(): void {
   const config = readConfig()
+  delete config.bannerColor
   delete config.showHiddenModels
   delete config.solutionFilter
   writeConfig(config)
@@ -87,4 +104,11 @@ export function getReportsDir(): string {
     mkdirSync(REPORTS_DIR, {recursive: true})
   }
   return REPORTS_DIR
+}
+
+export function getExportsDir(): string {
+  if (!existsSync(EXPORTS_DIR)) {
+    mkdirSync(EXPORTS_DIR, {recursive: true})
+  }
+  return EXPORTS_DIR
 }

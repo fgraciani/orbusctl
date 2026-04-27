@@ -1,6 +1,6 @@
 import {Command, Flags} from '@oclif/core'
 
-import {fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects} from '../api'
+import {fetchDrawingCount, fetchDrawingsContainingObject, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects} from '../api'
 import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {formatObjectDetail, formatObjectTable} from '../ui/table'
 
@@ -64,9 +64,12 @@ export default class Objects extends Command {
         originalModelName = await fetchObjectModelName(token, detail.Detail.OriginalObjectId)
       }
 
-      const relationships = await fetchObjectRelationships(token, obj.ObjectId)
+      const [relationships, drawings] = await Promise.all([
+        fetchObjectRelationships(token, obj.ObjectId),
+        fetchDrawingsContainingObject(token, match.ModelId, obj.ObjectId),
+      ])
 
-      for (const line of formatObjectDetail(detail, originalModelName, relationships)) {
+      for (const line of formatObjectDetail(detail, originalModelName, relationships, drawings)) {
         this.log(line)
       }
 
@@ -99,13 +102,15 @@ export default class Objects extends Command {
             relatedObject: {name: r.RelatedItem.Name, objectId: r.RelatedItem.ObjectId, objectType: r.RelatedItem.ObjectType.Name},
             relationshipType: r.Relationship.RelationshipType.Name,
           })),
+          drawings: drawings.map((d) => ({documentId: d.documentId, name: d.fileName})),
           status: detail.Detail.Status,
           version: detail.Detail.CurrentVersionNumber,
         },
       }
     }
 
-    this.log(`Found ${objects.length} object(s).`)
+    const drawingCount = await fetchDrawingCount(token, match.ModelId)
+    this.log(`Found ${objects.length} object(s), ${drawingCount} drawing(s).`)
     this.log()
 
     for (const line of formatObjectTable(objects)) {
