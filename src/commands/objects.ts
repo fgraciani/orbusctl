@@ -3,6 +3,7 @@ import {Command, Flags} from '@oclif/core'
 import {fetchDrawingCount, fetchDrawingsContainingObject, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects} from '../api'
 import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {formatObjectDetail, formatObjectTable} from '../ui/table'
+import {resolveMatch} from '../utils/resolve'
 
 const SYSTEM_ATTRIBUTES = new Set([
   'Created By',
@@ -38,10 +39,7 @@ export default class Objects extends Command {
     const showHidden = getShowHiddenModels()
     const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
 
-    const match = models.find((m) => m.Name.toLowerCase().includes(flags.model.toLowerCase()))
-    if (!match) {
-      this.error(`No model found matching "${flags.model}".`)
-    }
+    const match = resolveMatch(models, flags.model, (m) => m.Name, 'model', (msg) => this.error(msg))
 
     this.log(`Fetching objects for "${match.Name}"...`)
 
@@ -49,10 +47,7 @@ export default class Objects extends Command {
     const modelRef = {modelId: match.ModelId, name: match.Name}
 
     if (flags.object) {
-      const obj = objects.find((o) => o.Name.toLowerCase().includes(flags.object!.toLowerCase()))
-      if (!obj) {
-        this.error(`No object found matching "${flags.object}" in "${match.Name}".`)
-      }
+      const obj = resolveMatch(objects, flags.object!, (o) => o.Name, 'object', (msg) => this.error(msg))
 
       this.log(`Fetching details for "${obj.Name}"...`)
       this.log()

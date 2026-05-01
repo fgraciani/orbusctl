@@ -3,6 +3,7 @@ import {Command, Flags} from '@oclif/core'
 import {fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModels, fetchObjectNameAndType} from '../api'
 import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {formatDrawingDetail, formatDrawingTable} from '../ui/drawings'
+import {resolveMatch} from '../utils/resolve'
 
 export default class Drawings extends Command {
   static description = 'List drawings in a model'
@@ -26,10 +27,7 @@ export default class Drawings extends Command {
     const showHidden = getShowHiddenModels()
     const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
 
-    const match = models.find((m) => m.Name.toLowerCase().includes(flags.model.toLowerCase()))
-    if (!match) {
-      this.error(`No model found matching "${flags.model}".`)
-    }
+    const match = resolveMatch(models, flags.model, (m) => m.Name, 'model', (msg) => this.error(msg))
 
     this.log(`Fetching drawings for "${match.Name}"...`)
 
@@ -42,10 +40,7 @@ export default class Drawings extends Command {
     const modelRef = {modelId: match.ModelId, name: match.Name}
 
     if (flags.drawing) {
-      const drawing = drawings.find((d) => d.FileName.toLowerCase().includes(flags.drawing!.toLowerCase()))
-      if (!drawing) {
-        this.error(`No drawing found matching "${flags.drawing}" in "${match.Name}".`)
-      }
+      const drawing = resolveMatch(drawings, flags.drawing!, (d) => d.FileName, 'drawing', (msg) => this.error(msg))
 
       this.log(`Fetching components for "${drawing.FileName}"...`)
       this.log()

@@ -6,7 +6,7 @@ This is not an official Orbus tool.
 
 ## Status
 
-**v0.6.0** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, drawing browsing with component details, Excel export of model content (with per-drawing and audit sheets), ArchiMate colour coding, version check, configuration management, and machine-readable JSON output on all commands.
+**v0.6.1** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, drawing browsing with component details, Excel export of model content (with per-drawing and audit sheets), ArchiMate colour coding, version check, configuration management, and machine-readable JSON output on all commands. Includes smart disambiguation for model/object/drawing name matching and automatic ANSI colour suppression in non-TTY environments.
 
 ## Prerequisites
 

@@ -1,6 +1,6 @@
 {
   "name": "orbusctl",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "author": "Francisco Graciani",
   "description": "Orbus Administration CLI",
   "main": "dist/index.js",

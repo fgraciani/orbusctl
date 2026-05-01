@@ -6,6 +6,7 @@ import ExcelJS from 'exceljs'
 
 import {type DrawingComponent, type Model, type ObjectDetail, fetchAllRelationships, fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModels, fetchObjectDetail, fetchObjects} from '../api'
 import {getExportsDir, getShowHiddenModels, getSolutionFilter, getToken} from '../config'
+import {resolveMatch} from '../utils/resolve'
 
 const SYSTEM_ATTRS = new Set([
   'Created By',
@@ -323,8 +324,7 @@ export default class Export extends Command {
     const showHidden = getShowHiddenModels()
     const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
 
-    const match = models.find((m) => m.Name.toLowerCase().includes(flags.model.toLowerCase()))
-    if (!match) this.error(`No model found matching "${flags.model}".`)
+    const match = resolveMatch(models, flags.model, (m) => m.Name, 'model', (msg) => this.error(msg))
 
     this.log(`Exporting "${match.Name}"...`)
     this.log('Fetching objects, relationships, and drawings...')

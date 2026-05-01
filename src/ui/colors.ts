@@ -79,8 +79,10 @@ const TYPE_COLORS: Record<string, string> = {
   'Location': DIM,
 }
 
+const supportsColor = process.stdout.isTTY && !process.env.NO_COLOR
+
 export function colorType(typeName: string): string {
   const color = TYPE_COLORS[typeName.trim()]
-  if (!color) return typeName
+  if (!supportsColor || !color) return typeName
   return `${color}${typeName}${RESET}`
 }
