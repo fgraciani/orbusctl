@@ -6,7 +6,7 @@ This is not an official Orbus tool.
 
 ## Status
 
-**v0.6.1** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, drawing browsing with component details, Excel export of model content (with per-drawing and audit sheets), ArchiMate colour coding, version check, configuration management, and machine-readable JSON output on all commands. Includes smart disambiguation for model/object/drawing name matching and automatic ANSI colour suppression in non-TTY environments.
+**v0.7.0** — Interactive menu and scriptable subcommands for authentication, model listing with hierarchy and detail counts, object browsing with detail views and relationships, drawing browsing with component details, Excel export of model content (with per-drawing and audit sheets), ArchiMate colour coding, version check, configuration management, and machine-readable JSON output on all commands. Write commands for creating objects and relationships (password-protected). Includes smart disambiguation for model/object/drawing name matching and automatic ANSI colour suppression in non-TTY environments.
 
 ## Prerequisites
 
@@ -137,6 +137,12 @@ orbusctl config --show-hidden        # include deactivated models
 orbusctl config --no-show-hidden     # hide deactivated models
 orbusctl config --reset              # reset to defaults
 
+# Create an object (requires write password)
+orbusctl objects create --model-id <guid> --name "My Object" --type "Business role" --password <pw>
+
+# Create a relationship (requires write password)
+orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw>
+
 # Activity report (admin only — requires password)
 orbusctl activity --password <pw>                # last 7 days (default)
 orbusctl activity --password <pw> --days 30      # last 30 days
@@ -169,6 +175,8 @@ orbusctl drawings --model "EA Practice" --drawing "2025 EA" --json
 orbusctl activity --password <pw> --json
 orbusctl export --model "EA Practice" --json
 orbusctl export --model "EA Practice" --no-details --json
+orbusctl objects create --model-id <guid> --name "Test" --type "Business role" --password <pw> --json
+orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw> --json
 ```
 
 Example:
@@ -191,9 +199,10 @@ Scripts and CI pipelines can set the token via environment variable:
 
 ```sh
 ORBUS_TOKEN=your-token orbusctl models
+ORBUSCTL_WRITE_KEY=your-password orbusctl objects create --model-id <guid> --name "Test" --type "Business role"
 ```
 
-The environment variable takes priority over the saved config.
+The environment variables take priority over the saved config / flags.
 
 ### Configuration defaults
 

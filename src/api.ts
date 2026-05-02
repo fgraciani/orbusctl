@@ -499,3 +499,31 @@ export async function fetchMe(token: string): Promise<MeResponse> {
 
   return response.json() as Promise<MeResponse>
 }
+
+export async function createObject(token: string, modelId: string, objectTypeId: string, name: string): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Objects`, {
+    body: JSON.stringify({modelId, objectTypeId, attributeValuesFlat: {Name: name}}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to create object (HTTP ${response.status})`)
+  }
+
+  return response.json()
+}
+
+export async function createRelationship(token: string, modelId: string, relationshipTypeId: string, leadId: string, memberId: string): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Relationships`, {
+    body: JSON.stringify({modelId, relationshipTypeId, leadModelItemId: leadId, memberModelItemId: memberId}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to create relationship (HTTP ${response.status})`)
+  }
+
+  return response.json()
+}

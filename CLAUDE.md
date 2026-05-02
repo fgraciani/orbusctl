@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.6.1
+## Current version: 0.7.0
 
 ## API
 
@@ -25,6 +25,8 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - `GET /odata/Documents` — list drawings; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; max 50 per page
 - `GET /odata/Documents({key})` — get single document; supports `$expand=Components($expand=Object(...),Relationship(...))`
 - `GET /odata/DocumentTypes` — list document types; supports `$select`, `$top`, `$skip`
+- `POST /odata/Objects` — create object; body: `{modelId, objectTypeId, attributeValuesFlat: {Name}}` — returns `{success, successMessage: {messageDefinition: {objectId}}}`
+- `POST /odata/Relationships` — create relationship; body: `{modelId, relationshipTypeId, leadModelItemId, memberModelItemId}` — returns `{success, successMessage: {messageDefinition: {relationshipId}}}`
 
 ### OData patterns
 
@@ -46,6 +48,7 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - Users are discovered from `CreatedBy`/`LastModifiedBy` on objects/relationships
 - Activity reports are auto-saved as markdown to `~/.orbusctl/reports/`
 - The activity command is password-protected (scrypt hash embedded in source code)
+- Write commands (objects create, relationships create) are password-protected with a separate scrypt hash
 
 ### Object detail notes
 
@@ -64,7 +67,11 @@ src/
     index.ts      Interactive menu (default when no subcommand given)
     auth.ts       orbusctl auth
     models.ts     orbusctl models
-    objects.ts    orbusctl objects
+    objects/
+      index.ts    orbusctl objects
+      create.ts   orbusctl objects create (password-protected)
+    relationships/
+      create.ts   orbusctl relationships create (password-protected)
     drawings.ts   orbusctl drawings
     export.ts     orbusctl export (Excel export of objects, relationships, drawings)
     config.ts     orbusctl config
@@ -80,6 +87,7 @@ src/
     tree.ts       Model hierarchy tree formatter and model chooser
   api.ts          All API calls (fetch functions)
   config.ts       Config file read/write (~/.orbusctl/config.json)
+  type-maps.ts    ArchiMate 3.1 object type and relationship type ID maps
   update.ts       Version check against GitHub remote
 ```
 
@@ -146,6 +154,15 @@ orbusctl activity --password <pw> --days 30      # last 30 days
 orbusctl activity --password <pw> --hours 24     # last 24 hours
 orbusctl activity --password <pw> --user "GRACIANI"  # filter by user
 
+# Create an object (requires write password)
+orbusctl objects create --model-id <guid> --name "My Object" --type "Business role" --password <pw>
+
+# Create a relationship (requires write password)
+orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw>
+
+# Write commands also accept password via env var
+ORBUSCTL_WRITE_KEY=<pw> orbusctl objects create --model-id <guid> --name "My Object" --type "Business role"
+
 # Environment variable override (token only, for CI/scripts)
 ORBUS_TOKEN=<token> orbusctl models
 
@@ -162,6 +179,8 @@ orbusctl drawings --model "EA Practice" --drawing "2025 EA Objectives" --json
 orbusctl activity --password <pw> --json
 orbusctl export --model "EA Practice" --json
 orbusctl export --model "EA Practice" --no-details --json
+orbusctl objects create --model-id <guid> --name "Test" --type "Business role" --password <pw> --json
+orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw> --json
 ```
 
 ## Config file

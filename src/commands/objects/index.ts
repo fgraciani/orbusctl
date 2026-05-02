@@ -1,9 +1,9 @@
 import {Command, Flags} from '@oclif/core'
 
-import {fetchDrawingCount, fetchDrawingsContainingObject, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects} from '../api'
-import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
-import {formatObjectDetail, formatObjectTable} from '../ui/table'
-import {resolveMatch} from '../utils/resolve'
+import {fetchDrawingCount, fetchDrawingsContainingObject, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectRelationships, fetchObjects} from '../../api'
+import {getShowHiddenModels, getSolutionFilter, getToken} from '../../config'
+import {formatObjectDetail, formatObjectTable} from '../../ui/table'
+import {resolveMatch} from '../../utils/resolve'
 
 const SYSTEM_ATTRIBUTES = new Set([
   'Created By',
