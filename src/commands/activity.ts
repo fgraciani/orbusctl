@@ -5,6 +5,7 @@ import {scryptSync, timingSafeEqual} from 'node:crypto'
 import {Command, Flags} from '@oclif/core'
 
 import {type ActivityObject, type ActivityRelationship, type Model, fetchMe, fetchModels, fetchRecentObjects, fetchRecentRelationships} from '../api'
+import {logError} from '../log'
 import {getReportsDir, getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {type ActivityReport, formatActivityReportMarkdown, formatActivitySummary} from '../ui/activity'
 
@@ -185,6 +186,7 @@ export default class Activity extends Command {
           this.log(`  ${model.Name}: ${objects.length} object(s), ${relationships.length} relationship(s)`)
         }
       } catch (error) {
+        logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'activity report'})
         if (error instanceof Error && error.message === 'TOKEN_EXPIRED') {
           this.warn('Token expired mid-scan. Returning partial results.')
           break

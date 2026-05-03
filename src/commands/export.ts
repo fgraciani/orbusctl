@@ -5,6 +5,7 @@ import {Command, Flags} from '@oclif/core'
 import ExcelJS from 'exceljs'
 
 import {type DrawingComponent, type Model, type ObjectDetail, fetchAllRelationships, fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModels, fetchObjectDetail, fetchObjects} from '../api'
+import {logError} from '../log'
 import {getExportsDir, getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {resolveMatch} from '../utils/resolve'
 
@@ -118,7 +119,8 @@ export async function performExport(
     drawings.map(async (d) => {
       try {
         drawingComponentsMap.set(d.DocumentId, await fetchDrawingComponents(token, d.DocumentId))
-      } catch {
+      } catch (error) {
+        logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'export drawing components'})
         drawingComponentsMap.set(d.DocumentId, [])
       }
     }),

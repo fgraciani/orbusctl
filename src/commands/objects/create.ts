@@ -3,7 +3,8 @@ import {scryptSync, timingSafeEqual} from 'node:crypto'
 import {Command, Flags} from '@oclif/core'
 
 import {createObject} from '../../api'
-import {getToken} from '../../config'
+import {getToken, getUser} from '../../config'
+import {logWrite} from '../../log'
 import {resolveObjectTypeId} from '../../type-maps'
 
 const WRITE_SALT = '9dc632722f5969c6b7df90968eead7cc'
@@ -43,7 +44,16 @@ export default class ObjectsCreate extends Command {
 
     this.log(`Creating object "${flags.name}" (${flags.type}) in model ${flags['model-id']}...`)
 
-    const result = await createObject(token, flags['model-id'], objectTypeId, flags.name) as Record<string, unknown>
+    let result: Record<string, unknown>
+    try {
+      result = await createObject(token, flags['model-id'], objectTypeId, flags.name) as Record<string, unknown>
+    } catch (err) {
+      logWrite({operation: 'createObject', modelId: flags['model-id'], params: {name: flags.name, type: flags.type, objectTypeId}, success: false, error: (err as Error).message, user: getUser()})
+      throw err
+    }
+
+    logWrite({operation: 'createObject', modelId: flags['model-id'], params: {name: flags.name, type: flags.type, objectTypeId}, success: true, result, user: getUser()})
+
     const msg = result.successMessage as Record<string, unknown> | undefined
     const def = msg?.messageDefinition as Record<string, unknown> | undefined
     const objectId = (def?.objectId ?? result.ObjectId ?? result.objectId ?? null) as string | null

@@ -6,7 +6,8 @@ import {input, password, select} from '@inquirer/prompts'
 import {Command} from '@oclif/core'
 
 import {type ActivityObject, type ActivityRelationship, type Model, fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchDrawingsContainingObject, fetchMe, fetchModelDetailCounts, fetchModels, fetchObjectDetail, fetchObjectModelName, fetchObjectNameAndType, fetchObjectRelationships, fetchObjects, fetchRecentObjects, fetchRecentRelationships, fetchRelationshipEndpoints, fetchSolutions} from '../api'
-import {getBannerColor, getExportsDir, getReportsDir, getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveBannerColor, saveShowHiddenModels, saveSolutionFilter} from '../config'
+import {formatTokenAge, getBannerColor, getExportsDir, getReportsDir, getShowHiddenModels, getSolutionFilter, getToken, getUser, resetSettings, saveAuth, saveBannerColor, saveShowHiddenModels, saveSolutionFilter} from '../config'
+import {logAuth, logError} from '../log'
 import {performExport} from './export'
 import {type ActivityReport, buildModelActivityChoices, formatActivityReportMarkdown, formatActivitySummary, formatModelActivity} from '../ui/activity'
 import {colorBanner} from '../ui/banner'
@@ -44,11 +45,13 @@ export default class Index extends Command {
         accountName: me.AccountName,
         emailAddress: me.EmailAddress,
       })
+      logAuth({event: 'save', token, accountName: me.AccountName, userName: me.Name, emailAddress: me.EmailAddress})
       this.log(`  Authenticated as ${me.Name} (${me.EmailAddress}).`)
       this.log(`  Token saved to ~/.orbusctl/config.json.`)
       this.log()
       return true
-    } catch {
+    } catch (error) {
+      logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'token validation (promptForToken)'})
       this.log('  Token validation failed. Token was not saved.')
       this.log()
       return false
@@ -98,8 +101,10 @@ export default class Index extends Command {
           this.log(`  Authenticated as ${me.Name} (${me.EmailAddress}).`)
         }
 
-      } catch {
-        this.log('  Token expired or invalid.')
+      } catch (error) {
+        logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'token validation (startup)'})
+        const age = formatTokenAge()
+        this.log(`  Token expired or invalid.${age ? ` (saved ${age})` : ''}`)
         await this.promptForToken()
       }
 
@@ -140,7 +145,8 @@ export default class Index extends Command {
             }
 
             this.log()
-          } catch {
+          } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'fetch models'})
             this.log('  Failed to fetch models. Token may have expired.')
             this.log()
           }
@@ -181,7 +187,8 @@ export default class Index extends Command {
             }
 
             this.log()
-          } catch {
+          } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'fetch models (detail)'})
             this.log('  Failed to fetch models. Token may have expired.')
             this.log()
           }
@@ -278,7 +285,8 @@ export default class Index extends Command {
                 this.log()
               }
             }
-          } catch {
+          } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'fetch objects'})
             this.log('  Failed to fetch objects. Token may have expired.')
             this.log()
           }
@@ -332,7 +340,8 @@ export default class Index extends Command {
                   try {
                     const components = await fetchDrawingComponents(token, d.DocumentId)
                     componentCounts.set(d.DocumentId, components.length)
-                  } catch {
+                  } catch (error) {
+                    logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'fetch drawing components'})
                     componentCounts.set(d.DocumentId, null)
                   }
                 }),
@@ -396,7 +405,8 @@ export default class Index extends Command {
                 this.log()
               }
             }
-          } catch {
+          } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'fetch drawings'})
             this.log('  Failed to fetch drawings. Token may have expired.')
             this.log()
           }
@@ -462,6 +472,7 @@ export default class Index extends Command {
             this.log(`  Saved to ${result.filePath}`)
             this.log()
           } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'export'})
             this.log(`  Export failed: ${error instanceof Error ? error.message : String(error)}`)
             this.log()
           }
@@ -534,6 +545,7 @@ export default class Index extends Command {
                   this.log(`  ${model.Name}: ${objects.length} object(s), ${relationships.length} relationship(s)`)
                 }
               } catch (error) {
+                logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'activity scan'})
                 if (error instanceof Error && error.message === 'TOKEN_EXPIRED') {
                   this.log('  Token expired mid-scan. Showing partial results.')
                   break
@@ -576,7 +588,8 @@ export default class Index extends Command {
                 }
               }
             }
-          } catch {
+          } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'activity report'})
             this.log('  Failed to generate activity report. Token may have expired.')
             this.log()
           }
@@ -694,7 +707,8 @@ export default class Index extends Command {
             this.log()
             this.log(`  Solution filter set to "${chosen}".`)
             this.log()
-          } catch {
+          } catch (error) {
+            logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'config menu'})
             this.log('  Failed to fetch solutions. Token may have expired.')
             this.log()
           }

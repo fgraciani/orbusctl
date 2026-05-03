@@ -1,6 +1,6 @@
 import boxen = require('boxen')
 
-import {ObjectDetail, OrbusObject, RelatedObject} from '../api'
+import {AttributeValue, ObjectDetail, OrbusObject, RelatedObject} from '../api'
 import {colorType} from './colors'
 
 export function formatObjectTable(objects: OrbusObject[]): string[] {
@@ -165,9 +165,22 @@ export function formatObjectDetail(
     const maxDir = Math.max(...sorted.map((r) => r.DirectionDescription.length))
     contentLines.push('')
     contentLines.push(`Relationships (${sorted.length}):`)
+    const systemAttrs = new Set([
+      'Created By', 'Date Created', 'Date Last Modified', 'Description',
+      'iServer365 Id', 'Last Modified By', 'Metamodel Item Id', 'Metamodel Item Name', 'Name',
+    ])
     for (const rel of sorted) {
       const relType = rel.RelatedItem.ObjectType?.Name
       contentLines.push(`  ${rel.DirectionDescription.padEnd(maxDir)}  ${rel.RelatedItem.Name}${relType ? ` (${colorType(relType)})` : ''}  [${rel.Relationship.RelationshipType.Name}]`)
+      const relAttrs = (rel.Relationship.AttributeValues ?? [])
+        .filter((a: AttributeValue) => !systemAttrs.has(a.AttributeName))
+        .filter((a: AttributeValue) => a.Value !== null && a.Value !== undefined && a.Value !== '' || a.StringValue !== null && a.StringValue !== '' && a.StringValue !== a.Value)
+      if (relAttrs.length > 0) {
+        const pad = ' '.repeat(maxDir + 4)
+        for (const a of relAttrs) {
+          contentLines.push(`${pad}${a.AttributeName}: ${a.StringValue ?? String(a.Value ?? '')}`)
+        }
+      }
     }
   } else if (relationships && relationships.length === 0) {
     contentLines.push('')

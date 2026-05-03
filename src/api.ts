@@ -1,4 +1,19 @@
+import {getToken, getUser} from './config'
+import {logAuth} from './log'
+
 const BASE_URL = 'https://eurocontrol-api.iserver365.com'
+
+function logTokenExpired(): void {
+  const expiredToken = getToken()
+  const expiredUser = getUser()
+  logAuth({
+    event: 'expired',
+    token: expiredToken ?? 'unknown',
+    accountName: expiredUser?.accountName ?? 'unknown',
+    userName: expiredUser?.name ?? 'unknown',
+    emailAddress: expiredUser?.emailAddress ?? 'unknown',
+  })
+}
 
 interface MeResponse {
   Name: string
@@ -139,7 +154,10 @@ export interface AttributeValue {
 export interface RelatedObject {
   DirectionDescription: string
   RelatedItem: {Name: string; ObjectId: string; ObjectType: {Name: string}}
-  Relationship: {RelationshipType: {Name: string}}
+  Relationship: {
+    AttributeValues?: AttributeValue[]
+    RelationshipType: {Name: string}
+  }
 }
 
 export interface ObjectDetail {
@@ -171,17 +189,47 @@ export async function fetchObjectDetail(token: string, objectId: string): Promis
 }
 
 export async function fetchObjectRelationships(token: string, objectId: string): Promise<RelatedObject[]> {
-  const response = await fetch(
-    `${BASE_URL}/odata/Objects(${objectId})?$select=ObjectId&$expand=RelatedObjects($expand=RelatedItem($select=Name,ObjectId;$expand=ObjectType($select=Name)),Relationship($expand=RelationshipType($select=Name)))`,
-    {headers: {Authorization: `Bearer ${token}`}},
-  )
+  const all: RelatedObject[] = []
+  let skip = 0
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch relationships (HTTP ${response.status})`)
+  for (;;) {
+    const url = `${BASE_URL}/odata/Relationships?$filter=LeadObjectId eq ${objectId} or MemberObjectId eq ${objectId}&$expand=RelationshipType($select=Name),LeadObject($select=Name,ObjectId;$expand=ObjectType($select=Name)),MemberObject($select=Name,ObjectId;$expand=ObjectType($select=Name)),AttributeValues&$top=${PAGE_SIZE}&$skip=${skip}`
+    const response = await fetch(url, {headers: {Authorization: `Bearer ${token}`}})
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch relationships (HTTP ${response.status})`)
+    }
+
+    interface RawRel {
+      AttributeValues?: AttributeValue[]
+      LeadObject: {Name: string; ObjectId: string; ObjectType: {Name: string}} | null
+      MemberObject: {Name: string; ObjectId: string; ObjectType: {Name: string}} | null
+      RelationshipType: {Name: string} | null
+    }
+
+    const data = (await response.json()) as {value: RawRel[]}
+
+    for (const rel of data.value) {
+      if (!rel.RelationshipType) continue
+      const isLead = rel.LeadObject?.ObjectId === objectId
+      const related = isLead ? rel.MemberObject : rel.LeadObject
+      if (!related) continue
+
+      all.push({
+        DirectionDescription: isLead ? 'Leads' : 'Member of',
+        RelatedItem: {Name: related.Name, ObjectId: related.ObjectId, ObjectType: related.ObjectType},
+        Relationship: {
+          AttributeValues: rel.AttributeValues,
+          RelationshipType: {Name: rel.RelationshipType.Name},
+        },
+      })
+    }
+
+    if (data.value.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
   }
 
-  const data = (await response.json()) as {RelatedObjects: RelatedObject[]}
-  return data.RelatedObjects ?? []
+  return all
 }
 
 export async function fetchObjectModelName(token: string, objectId: string): Promise<string | null> {
@@ -237,7 +285,10 @@ export async function fetchRecentObjects(token: string, modelId: string, since: 
     })
 
     if (!response.ok) {
-      if (response.status === 401) throw new Error('TOKEN_EXPIRED')
+      if (response.status === 401) {
+        logTokenExpired()
+        throw new Error('TOKEN_EXPIRED')
+      }
       throw new Error(`Failed to fetch recent objects (HTTP ${response.status})`)
     }
 
@@ -274,7 +325,10 @@ export async function fetchRecentRelationships(token: string, modelId: string, s
     })
 
     if (!response.ok) {
-      if (response.status === 401) throw new Error('TOKEN_EXPIRED')
+      if (response.status === 401) {
+        logTokenExpired()
+        throw new Error('TOKEN_EXPIRED')
+      }
       throw new Error(`Failed to fetch recent relationships (HTTP ${response.status})`)
     }
 
@@ -514,9 +568,15 @@ export async function createObject(token: string, modelId: string, objectTypeId:
   return response.json()
 }
 
-export async function createRelationship(token: string, modelId: string, relationshipTypeId: string, leadId: string, memberId: string): Promise<unknown> {
+export async function createRelationship(token: string, modelId: string, relationshipTypeId: string, leadId: string, memberId: string, alias?: string): Promise<unknown> {
   const response = await fetch(`${BASE_URL}/odata/Relationships`, {
-    body: JSON.stringify({modelId, relationshipTypeId, leadModelItemId: leadId, memberModelItemId: memberId}),
+    body: JSON.stringify({
+      modelId,
+      relationshipTypeId,
+      leadModelItemId: leadId,
+      memberModelItemId: memberId,
+      ...(alias ? {attributeValues: [{attributeName: 'Alias', stringValue: alias}]} : {}),
+    }),
     headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
     method: 'POST',
   })

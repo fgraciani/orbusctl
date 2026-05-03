@@ -1,6 +1,7 @@
 import {Command, Flags} from '@oclif/core'
 
 import {fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModels, fetchObjectNameAndType} from '../api'
+import {logError} from '../log'
 import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {formatDrawingDetail, formatDrawingTable} from '../ui/drawings'
 import {resolveMatch} from '../utils/resolve'
@@ -90,7 +91,8 @@ export default class Drawings extends Command {
         try {
           const components = await fetchDrawingComponents(token, d.DocumentId)
           componentCounts.set(d.DocumentId, components.length)
-        } catch {
+        } catch (error) {
+          logError({error: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, context: 'fetch drawing components'})
           componentCounts.set(d.DocumentId, null)
         }
       }),

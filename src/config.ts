@@ -20,6 +20,7 @@ interface Config {
   showHiddenModels?: boolean
   solutionFilter?: string
   token?: string
+  tokenSavedAt?: string
   user?: UserInfo
 }
 
@@ -92,9 +93,30 @@ export function resetSettings(): void {
   writeConfig(config)
 }
 
+export function getTokenSavedAt(): string | undefined {
+  return readConfig().tokenSavedAt
+}
+
+export function formatTokenAge(): string | null {
+  const saved = readConfig().tokenSavedAt
+  if (!saved) return null
+  const ms = Date.now() - new Date(saved).getTime()
+  if (ms < 0) return null
+  const mins = Math.floor(ms / 60_000)
+  if (mins < 1) return 'less than a minute ago'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  const rm = mins % 60
+  if (hrs < 24) return rm > 0 ? `${hrs}h ${rm}m ago` : `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  const rh = hrs % 24
+  return rh > 0 ? `${days}d ${rh}h ago` : `${days}d ago`
+}
+
 export function saveAuth(token: string, user: UserInfo): void {
   const config = readConfig()
   config.token = token
+  config.tokenSavedAt = new Date().toISOString()
   config.user = user
   writeConfig(config)
 }

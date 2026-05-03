@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.7.0
+## Current version: 0.8.0
 
 ## API
 
@@ -26,7 +26,7 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - `GET /odata/Documents({key})` — get single document; supports `$expand=Components($expand=Object(...),Relationship(...))`
 - `GET /odata/DocumentTypes` — list document types; supports `$select`, `$top`, `$skip`
 - `POST /odata/Objects` — create object; body: `{modelId, objectTypeId, attributeValuesFlat: {Name}}` — returns `{success, successMessage: {messageDefinition: {objectId}}}`
-- `POST /odata/Relationships` — create relationship; body: `{modelId, relationshipTypeId, leadModelItemId, memberModelItemId}` — returns `{success, successMessage: {messageDefinition: {relationshipId}}}`
+- `POST /odata/Relationships` — create relationship; body: `{modelId, relationshipTypeId, leadModelItemId, memberModelItemId}` — returns `{success, successMessage: {messageDefinition: {relationshipId}}}`; supports optional `attributeValuesFlat: {Alias: "value"}` to set relationship attributes on creation
 
 ### OData patterns
 
@@ -35,7 +35,8 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - Filter models by solution: `$filter=Solutions/any(s: s/Name eq 'ArchiMate 3.1')`
 - Filter objects/relationships by model: `$filter=ModelId eq <uuid>`
 - Direct object lookup: `/odata/Objects(<uuid>)` — returns object directly, not wrapped in `value` array
-- Nested expands: `$expand=RelatedObjects($expand=RelatedItem($select=Name;$expand=ObjectType($select=Name)))`
+- Nested expands: `$expand=RelatedObjects($expand=RelatedItem($select=Name;$expand=ObjectType($select=Name)))` — do NOT add AttributeValues inside nested Relationship expand (3-level depth crashes the API)
+- Object relationships with attributes: use `/odata/Relationships?$filter=LeadModelItemId eq <uuid> or MemberModelItemId eq <uuid>` with flat `$expand=RelationshipType,LeadObject,MemberObject,AttributeValues` instead
 - Filter documents by model: `$filter=ModelId eq <uuid>` — only returns Draw documents (Visio docs have null ModelId)
 - Drawing components expand: `$expand=Components($expand=Object($select=Name;$expand=ObjectType($select=Name)),Relationship($select=RelationshipTypeId))`
 - `RepresentationSituationId` in Components: 0/null = Object, 1 = Connector, 2 = Containment, 3 = Overlap
@@ -57,7 +58,9 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - `Detail.OriginalObjectId` points to the original object for Reuse/Variant — use it to look up the source model
 - System attributes to filter from display: Name, Description, iServer365 Id, Created By, Date Created, Date Last Modified, Last Modified By, Metamodel Item Id, Metamodel Item Name
 - `LockedOn`/`LockedBy` indicate content locks — show in red when locked
-- `RelatedObjects` expand returns relationships with DirectionDescription, RelatedItem, and Relationship.RelationshipType
+- Object relationships are fetched via `/odata/Relationships` filtered by LeadModelItemId/MemberModelItemId (not via RelatedObjects expand) to allow flat AttributeValues expansion
+- Direction is computed from lead/member: if the object is lead → "Leads", if member → "Member of"
+- Relationship attributes use the same `AttributeValue` shape as object attributes — filter system attributes from display
 
 ## Architecture
 
@@ -87,6 +90,7 @@ src/
     tree.ts       Model hierarchy tree formatter and model chooser
   api.ts          All API calls (fetch functions)
   config.ts       Config file read/write (~/.orbusctl/config.json)
+  log.ts          Structured JSONL logging (~/.orbusctl/logs/)
   type-maps.ts    ArchiMate 3.1 object type and relationship type ID maps
   update.ts       Version check against GitHub remote
 ```
@@ -159,6 +163,7 @@ orbusctl objects create --model-id <guid> --name "My Object" --type "Business ro
 
 # Create a relationship (requires write password)
 orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw>
+orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --alias "R" --password <pw>
 
 # Write commands also accept password via env var
 ORBUSCTL_WRITE_KEY=<pw> orbusctl objects create --model-id <guid> --name "My Object" --type "Business role"
@@ -181,6 +186,7 @@ orbusctl export --model "EA Practice" --json
 orbusctl export --model "EA Practice" --no-details --json
 orbusctl objects create --model-id <guid> --name "Test" --type "Business role" --password <pw> --json
 orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw> --json
+orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --alias "R" --password <pw> --json
 ```
 
 ## Config file
@@ -195,6 +201,7 @@ Stored at `~/.orbusctl/config.json`:
     "accountName": "francisco.graciani@eurocontrol.int",
     "emailAddress": "francisco.graciani@eurocontrol.int"
   },
+  "tokenSavedAt": "2025-05-03T10:00:00.000Z",
   "solutionFilter": "ArchiMate 3.1",
   "showHiddenModels": false
 }

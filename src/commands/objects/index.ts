@@ -96,6 +96,10 @@ export default class Objects extends Command {
             direction: r.DirectionDescription,
             relatedObject: {name: r.RelatedItem.Name, objectId: r.RelatedItem.ObjectId, objectType: r.RelatedItem.ObjectType.Name},
             relationshipType: r.Relationship.RelationshipType.Name,
+            attributes: (r.Relationship.AttributeValues ?? [])
+              .filter((a) => !SYSTEM_ATTRIBUTES.has(a.AttributeName))
+              .filter((a) => a.Value !== null && a.Value !== undefined && a.Value !== '' || a.StringValue !== null && a.StringValue !== '' && a.StringValue !== a.Value)
+              .map((a) => ({name: a.AttributeName, value: a.StringValue ?? a.Value ?? null})),
           })),
           drawings: drawings.map((d) => ({documentId: d.documentId, name: d.fileName})),
           status: detail.Detail.Status,

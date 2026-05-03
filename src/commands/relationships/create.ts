@@ -3,7 +3,8 @@ import {scryptSync, timingSafeEqual} from 'node:crypto'
 import {Command, Flags} from '@oclif/core'
 
 import {createRelationship} from '../../api'
-import {getToken} from '../../config'
+import {getToken, getUser} from '../../config'
+import {logWrite} from '../../log'
 import {resolveRelationshipTypeId} from '../../type-maps'
 
 const WRITE_SALT = '9dc632722f5969c6b7df90968eead7cc'
@@ -20,6 +21,7 @@ export default class RelationshipsCreate extends Command {
   static enableJsonFlag = true
 
   static flags = {
+    alias: Flags.string({char: 'a', description: 'Alias value for the relationship'}),
     'lead-id': Flags.string({description: 'Lead object ID (GUID)', required: true}),
     'member-id': Flags.string({description: 'Member object ID (GUID)', required: true}),
     'model-id': Flags.string({char: 'm', description: 'Model ID (GUID)', required: true}),
@@ -44,7 +46,16 @@ export default class RelationshipsCreate extends Command {
 
     this.log(`Creating ${flags.type} relationship...`)
 
-    const result = await createRelationship(token, flags['model-id'], relationshipTypeId, flags['lead-id'], flags['member-id']) as Record<string, unknown>
+    let result: Record<string, unknown>
+    try {
+      result = await createRelationship(token, flags['model-id'], relationshipTypeId, flags['lead-id'], flags['member-id'], flags.alias) as Record<string, unknown>
+    } catch (err) {
+      logWrite({operation: 'createRelationship', modelId: flags['model-id'], params: {type: flags.type, relationshipTypeId, leadId: flags['lead-id'], memberId: flags['member-id'], alias: flags.alias}, success: false, error: (err as Error).message, user: getUser()})
+      throw err
+    }
+
+    logWrite({operation: 'createRelationship', modelId: flags['model-id'], params: {type: flags.type, relationshipTypeId, leadId: flags['lead-id'], memberId: flags['member-id'], alias: flags.alias}, success: true, result, user: getUser()})
+
     const msg = result.successMessage as Record<string, unknown> | undefined
     const def = msg?.messageDefinition as Record<string, unknown> | undefined
     const relationshipId = (def?.relationshipId ?? result.RelationshipId ?? result.relationshipId ?? null) as string | null
@@ -52,6 +63,7 @@ export default class RelationshipsCreate extends Command {
     this.log(`Created relationship: ${relationshipId ?? 'unknown'}`)
 
     return {
+      alias: flags.alias ?? null,
       leadId: flags['lead-id'],
       memberId: flags['member-id'],
       modelId: flags['model-id'],

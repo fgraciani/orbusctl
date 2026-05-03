@@ -3,6 +3,7 @@ import {Args, Command, Flags} from '@oclif/core'
 
 import {fetchMe} from '../api'
 import {saveAuth} from '../config'
+import {logAuth} from '../log'
 
 export default class Auth extends Command {
   static args = {
@@ -39,6 +40,7 @@ export default class Auth extends Command {
       accountName: me.AccountName,
       emailAddress: me.EmailAddress,
     })
+    logAuth({event: 'save', token, accountName: me.AccountName, userName: me.Name, emailAddress: me.EmailAddress})
     this.log(`Authenticated as ${me.Name} (${me.EmailAddress}).`)
     this.log('Token saved to ~/.orbusctl/config.json.')
 
