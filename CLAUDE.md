@@ -4,7 +4,7 @@
 
 orbusctl is a CLI tool for interacting with the Orbus (iServer) API, built with TypeScript and oclif. It provides both an interactive terminal menu and scriptable subcommands.
 
-## Current version: 0.8.0
+## Current version: 0.9.0
 
 ## API
 
@@ -23,10 +23,14 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - `GET /odata/Objects({key})` — get single object by ID; supports `$expand` for ObjectType, AttributeValues, Detail, CreatedBy, LastModifiedBy, LockedBy, Model, RelatedObjects
 - `GET /odata/Relationships` — list relationships; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; supports `$expand` for RelationshipType, LeadObject, MemberObject, CreatedBy
 - `GET /odata/Documents` — list drawings; supports `$filter` by `ModelId`, `$count=true&$top=0` for count-only; max 50 per page
+- `GET /odata/Models({key})` — get single model by ID; supports `$select`
 - `GET /odata/Documents({key})` — get single document; supports `$expand=Components($expand=Object(...),Relationship(...))`
 - `GET /odata/DocumentTypes` — list document types; supports `$select`, `$top`, `$skip`
 - `POST /odata/Objects` — create object; body: `{modelId, objectTypeId, attributeValuesFlat: {Name}}` — returns `{success, successMessage: {messageDefinition: {objectId}}}`
-- `POST /odata/Relationships` — create relationship; body: `{modelId, relationshipTypeId, leadModelItemId, memberModelItemId}` — returns `{success, successMessage: {messageDefinition: {relationshipId}}}`; supports optional `attributeValuesFlat: {Alias: "value"}` to set relationship attributes on creation
+- `POST /odata/Relationships` — create relationship; body: `{modelId, relationshipTypeId, leadModelItemId, memberModelItemId}` — returns `{success, successMessage: {messageDefinition: {relationshipId}}}`; supports optional `attributeValues: [{attributeName, stringValue}]` to set relationship attributes on creation
+- `PATCH /odata/Objects({key})` — update object attributes; body: `{attributeValuesFlat: {Name, Description, ...}}` for Text attributes — returns `{success, operationType: "Update", successMessage: {messageDefinition: {objectId, name, updatedObjectIds}}}`
+- `PATCH /odata/Relationships({key})` — update relationship attributes; body: `{attributeValuesFlat: {Alias, ...}}` for Text attributes — returns `{success, operationType: "Update", successMessage: {messageDefinition: {relationshipId}}}`
+- `PATCH` (both Objects and Relationships) also supports `{attributeValues: [{attributeName, attributeCategory: "Choice", choiceValues: [{attributeConfigurationChoiceId}]}]}` for known Choice attributes. `attributeValuesFlat` does NOT work for Choice attributes (returns `AttributeDoesNotExistByKey`). Choice IDs are mapped in `src/choice-maps.ts`.
 
 ### OData patterns
 
@@ -49,7 +53,7 @@ Authentication is via Azure AD bearer tokens passed in the `Authorization` heade
 - Users are discovered from `CreatedBy`/`LastModifiedBy` on objects/relationships
 - Activity reports are auto-saved as markdown to `~/.orbusctl/reports/`
 - The activity command is password-protected (scrypt hash embedded in source code)
-- Write commands (objects create, relationships create) are password-protected with a separate scrypt hash
+- Write commands (objects create/update/move, relationships create/update) are password-protected with a separate scrypt hash
 
 ### Object detail notes
 
@@ -73,10 +77,13 @@ src/
     objects/
       index.ts    orbusctl objects
       create.ts   orbusctl objects create (password-protected)
+      update.ts   orbusctl objects update (password-protected)
+      move.ts     orbusctl objects move (password-protected)
     relationships/
       create.ts   orbusctl relationships create (password-protected)
+      update.ts   orbusctl relationships update (password-protected)
     drawings.ts   orbusctl drawings
-    export.ts     orbusctl export (Excel export of objects, relationships, drawings)
+    export.ts     orbusctl export (Excel/Markdown export of objects, relationships, drawings)
     config.ts     orbusctl config
     version.ts    orbusctl version
     activity.ts   orbusctl activity (admin-only activity report)
@@ -92,12 +99,39 @@ src/
   config.ts       Config file read/write (~/.orbusctl/config.json)
   log.ts          Structured JSONL logging (~/.orbusctl/logs/)
   type-maps.ts    ArchiMate 3.1 object type and relationship type ID maps
+  choice-maps.ts  Known Choice attribute value maps (RASCI, Access Operator) with human-readable value resolution
+  correlation.ts  CorrelationTable types and saveCorrelationTable helper for move/copy operations
   update.ts       Version check against GitHub remote
+  utils/
+    resolve.ts    resolveMatch() — three-tier fuzzy name matching for models/objects/drawings
+  markdown-export.ts   Markdown export logic (frontmatter, stats, objects catalogue, diagram detail, coverage matrix, audit)
+  template-export.ts   Template-based markdown export (ORBUS-TABLE/ORBUS-DIAGRAM tag processing, scope overrides, SVG embedding)
 ```
 
 ### JSON output
 
 All subcommands (except the interactive menu) support `--json` via oclif's built-in `enableJsonFlag`. When active, `this.log()` and `this.warn()` are suppressed and the return value of `run()` is serialized as JSON to stdout. Each command returns camelCase keys. Maps are converted to arrays.
+
+## Git and versioning
+
+- **Semantic versioning**: MAJOR.MINOR.PATCH. New features bump MINOR, bug fixes bump PATCH. Pre-1.0, breaking changes also bump MINOR.
+- **Version source of truth**: `package.json` version field. Keep `package-lock.json`, the "Current version" line in this file, and the Status line in `README.md` in sync with it.
+- **CHANGELOG.md**: follows [Keep a Changelog](https://keepachangelog.com/) format. This is the only place that describes what changed per version.
+  - **`[Unreleased]` section**: every code change gets a line added under `## [Unreleased]` immediately, even before committing. This keeps a running draft of what will become the next version. Use Added/Changed/Fixed/Removed sub-sections.
+  - **On release**: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, add a fresh empty `## [Unreleased]` above it, update the comparison links at the bottom, and bump `package.json`.
+- **Git tags**: create a tag `vX.Y.Z` for every release. Push tags with `git push --tags`.
+- **Commit granularity**: prefer smaller, focused commits over mega-commits. A feature can span 2-3 commits (data layer, UI, docs). Tag the final one.
+- **Commit messages**: imperative mood title, blank line, then body explaining what and why. Keep the version tag `(vX.Y.Z)` in the title of version-bump commits.
+
+### What goes where (no duplication)
+
+| File | Purpose | Update when |
+|---|---|---|
+| `CHANGELOG.md` | Version history: what changed, when | Every version bump |
+| `README.md` | What the tool does today, how to install and use it | Commands, flags, or behaviour change |
+| `CLAUDE.md` | Architecture, API patterns, rules for working on the code | Files, endpoints, or conventions change |
+
+Do NOT duplicate changelog content into README or CLAUDE.md. README and CLAUDE.md describe current state only — no version-by-version narratives. When a feature is added or changed, update the relevant sections in README/CLAUDE.md to reflect the new current state, and record the version history exclusively in CHANGELOG.md.
 
 ## Rules
 
@@ -105,7 +139,8 @@ All subcommands (except the interactive menu) support `--json` via oclif's built
 - Keep the implementation boring, clean, and minimal.
 - API calls go in src/api.ts, not in commands.
 - Config access goes through src/config.ts functions, not direct file reads.
-- Before committing, always update README.md and CLAUDE.md to reflect any new features, commands, files, or API endpoints.
+- Auth JSONL logs intentionally include full local bearer tokens for token-behavior analysis; future versions may switch to token hashes.
+- Before committing, update README.md, CLAUDE.md, and CHANGELOG.md as needed (see "What goes where" above).
 
 ## Subcommands (for scripts and LLMs)
 
@@ -124,20 +159,29 @@ orbusctl models --detail
 
 # List objects in a model (partial name match)
 orbusctl objects --model "Airports"
+orbusctl objects --model-id <guid>                           # skip name resolution
 
 # Show full details for a specific object
 orbusctl objects --model "Airports" --object "DWH"
+orbusctl objects --model-id <guid> --object-id <guid>        # by GUID
 
 # List drawings in a model (partial name match)
 orbusctl drawings --model "EA Practice"
+orbusctl drawings --model-id <guid>
 
 # Show components of a specific drawing
 orbusctl drawings --model "EA Practice" --drawing "2025 EA Objectives"
+orbusctl drawings --model-id <guid> --drawing-id <guid>      # by GUID
 
 # Export model to Excel (objects + relationships + drawings sheets)
 orbusctl export --model "EA Practice"
+orbusctl export --model-id <guid>                            # skip name resolution
 orbusctl export --model "EA Practice" --no-details          # fast: Name/Id/Type only
 orbusctl export --model "EA Practice" --output ~/Desktop    # custom output directory
+
+# Export model to Markdown (vanilla: metadata, stats, objects catalogue with descriptions, diagram detail, coverage matrix, audit)
+orbusctl export --model "EA Practice" --format markdown
+orbusctl export --model "EA Practice" --format markdown --output ~/Desktop
 
 # Show current config
 orbusctl config
@@ -161,9 +205,27 @@ orbusctl activity --password <pw> --user "GRACIANI"  # filter by user
 # Create an object (requires write password)
 orbusctl objects create --model-id <guid> --name "My Object" --type "Business role" --password <pw>
 
+# Update object attributes (requires write password)
+orbusctl objects update --object-id <guid> --set "Name=New name" --set "Description=New desc" --password <pw>
+
 # Create a relationship (requires write password)
 orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw>
 orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --alias "R" --password <pw>
+
+# Update relationship attributes (requires write password)
+orbusctl relationships update --relationship-id <guid> --set "Alias=R" --password <pw>
+
+# Update Choice attributes with human-readable values (requires write password)
+orbusctl relationships update --relationship-id <guid> --set-choice "RASCI=R,A" --password <pw>
+orbusctl relationships update --relationship-id <guid> --set-choice "Access Operator=Read" --password <pw>
+orbusctl objects update --object-id <guid> --set-choice "Access Operator=Read" --password <pw>
+
+# Move objects between models (requires write password)
+orbusctl objects move --source-id <guid> --target-id <guid> --dry-run --password <pw>
+orbusctl objects move --source-id <guid> --target-id <guid> --password <pw>
+
+# Template-based export (custom document layout)
+orbusctl export --model-id <guid> --format markdown --template path/to/template.md --output path/to/output
 
 # Write commands also accept password via env var
 ORBUSCTL_WRITE_KEY=<pw> orbusctl objects create --model-id <guid> --name "My Object" --type "Business role"
@@ -184,9 +246,14 @@ orbusctl drawings --model "EA Practice" --drawing "2025 EA Objectives" --json
 orbusctl activity --password <pw> --json
 orbusctl export --model "EA Practice" --json
 orbusctl export --model "EA Practice" --no-details --json
+orbusctl export --model "EA Practice" --format markdown --json
 orbusctl objects create --model-id <guid> --name "Test" --type "Business role" --password <pw> --json
 orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --password <pw> --json
 orbusctl relationships create --model-id <guid> --lead-id <guid> --member-id <guid> --type "ArchiMate: Association" --alias "R" --password <pw> --json
+orbusctl objects update --object-id <guid> --set "Name=New name" --password <pw> --json
+orbusctl relationships update --relationship-id <guid> --set "Alias=R" --password <pw> --json
+orbusctl relationships update --relationship-id <guid> --set-choice "RASCI=R,A" --password <pw> --json
+orbusctl export --model-id <guid> --format markdown --template path/to/template.md --json
 ```
 
 ## Config file

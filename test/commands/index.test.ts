@@ -1,7 +1,7 @@
 import {expect} from 'chai'
 
-import {banner} from '../../dist/ui/banner'
-import {MenuChoice} from '../../dist/ui/menu'
+import {banner} from '../../dist/ui/banner.js'
+import type {MenuChoice} from '../../dist/ui/menu.js'
 
 describe('orbusctl', () => {
   it('banner contains the logo', () => {

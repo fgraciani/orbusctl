@@ -1,15 +1,11 @@
 import {input} from '@inquirer/prompts'
-import {Args, Command, Flags} from '@oclif/core'
+import {Command, Flags} from '@oclif/core'
 
 import {fetchMe} from '../api'
 import {saveAuth} from '../config'
 import {logAuth} from '../log'
 
 export default class Auth extends Command {
-  static args = {
-    token: Args.string({description: 'Bearer token to validate and save', required: false}),
-  }
-
   static description = 'Set authentication token'
 
   static enableJsonFlag = true
@@ -19,12 +15,12 @@ export default class Auth extends Command {
   }
 
   async run(): Promise<{accountName: string; emailAddress: string; name: string}> {
-    const {args, flags} = await this.parse(Auth)
-    let token = flags.token ?? args.token
+    const {flags} = await this.parse(Auth)
+    let token = flags.token
 
     if (!token) {
       if (this.jsonEnabled()) {
-        this.error('Token is required in JSON mode. Use --token or pass as argument.')
+        this.error('Token is required in JSON mode. Use --token.')
       }
 
       this.log('Get your token at: https://eurocontrol-api.iserver365.com/oapi2/swagger/index.html')

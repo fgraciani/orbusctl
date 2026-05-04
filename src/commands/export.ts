@@ -4,9 +4,11 @@ import {join} from 'node:path'
 import {Command, Flags} from '@oclif/core'
 import ExcelJS from 'exceljs'
 
-import {type DrawingComponent, type Model, type ObjectDetail, fetchAllRelationships, fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModels, fetchObjectDetail, fetchObjects} from '../api'
+import {type DrawingComponent, type Model, type ObjectDetail, fetchAllRelationships, fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModel, fetchModels, fetchObjectDetail, fetchObjects} from '../api'
 import {logError} from '../log'
 import {getExportsDir, getShowHiddenModels, getSolutionFilter, getToken} from '../config'
+import {performMarkdownExport} from '../markdown-export'
+import {performTemplateExport} from '../template-export'
 import {resolveMatch} from '../utils/resolve'
 
 const SYSTEM_ATTRS = new Set([
@@ -302,7 +304,7 @@ export async function performExport(
 }
 
 export default class Export extends Command {
-  static description = 'Export model content (objects, relationships, drawings) to Excel'
+  static description = 'Export model content (objects, relationships, drawings) to Excel or Markdown'
 
   static enableJsonFlag = true
 
@@ -310,10 +312,21 @@ export default class Export extends Command {
     details: Flags.boolean({
       allowNo: true,
       default: true,
-      description: 'Fetch full object attributes (use --no-details for fast name/id/type only)',
+      description: 'Fetch full object attributes (use --no-details for fast name/id/type only; Excel only)',
     }),
-    model: Flags.string({char: 'm', description: 'Model name (or partial match)', required: true}),
+    format: Flags.string({
+      char: 'f',
+      default: 'excel',
+      description: 'Output format',
+      options: ['excel', 'markdown'],
+    }),
+    model: Flags.string({char: 'm', description: 'Model name (or partial match)'}),
+    'model-id': Flags.string({description: 'Model ID (GUID) — use instead of --model'}),
     output: Flags.string({char: 'o', description: 'Output directory (default: ~/.orbusctl/exports/)'}),
+    template: Flags.string({
+      char: 't',
+      description: 'Template file for markdown export (optional)',
+    }),
   }
 
   async run(): Promise<Record<string, unknown>> {
@@ -321,12 +334,80 @@ export default class Export extends Command {
     const token = getToken()
     if (!token) this.error('No token configured. Run "orbusctl auth" first.')
 
-    const filter = getSolutionFilter()
-    const allModels = await fetchModels(token, filter)
-    const showHidden = getShowHiddenModels()
-    const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+    if (flags.template && flags.format !== 'markdown') {
+      this.error('--template requires --format markdown.')
+    }
+    if (flags.template && !existsSync(flags.template)) {
+      this.error(`Template file not found: ${flags.template}`)
+    }
+    if (flags.model && flags['model-id']) {
+      this.error('Provide --model or --model-id, not both.')
+    }
+    if (!flags.model && !flags['model-id']) {
+      this.error('Provide --model (name) or --model-id (GUID).')
+    }
 
-    const match = resolveMatch(models, flags.model, (m) => m.Name, 'model', (msg) => this.error(msg))
+    let match: Model
+    if (flags['model-id']) {
+      match = await fetchModel(token, flags['model-id'])
+    } else {
+      const filter = getSolutionFilter()
+      const allModels = await fetchModels(token, filter)
+      const showHidden = getShowHiddenModels()
+      const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+      match = resolveMatch(models, flags.model!, (m) => m.Name, 'model', (msg) => this.error(msg))
+    }
+
+    if (flags.format === 'markdown') {
+      if (flags.template) {
+        this.log(`Exporting "${match.Name}" using template...`)
+        this.log('Fetching objects and relationships...')
+
+        const result = await performTemplateExport(
+          token,
+          match,
+          flags.template,
+          flags.output ?? getExportsDir(),
+          (current, total) => process.stderr.write(`\r  Fetching object details (${current}/${total})...`),
+        )
+
+        this.log(`  ${result.objects} object(s), ${result.relationships} relationship(s).`)
+        this.log()
+        this.log(`Saved to ${result.filePath}`)
+
+        return {
+          drawings: result.drawings,
+          file: result.filePath,
+          format: 'template',
+          model: {modelId: match.ModelId, name: match.Name},
+          objects: result.objects,
+          relationships: result.relationships,
+        }
+      }
+
+      this.log(`Exporting "${match.Name}" as markdown...`)
+      this.log('Fetching objects, relationships, and drawings...')
+
+      const result = await performMarkdownExport(
+        token,
+        match,
+        flags.output ?? getExportsDir(),
+        (current, total) => process.stderr.write(`\r  Fetching object details (${current}/${total})...`),
+      )
+
+      this.log(`  ${result.objects} object(s), ${result.relationships} relationship(s), ${result.drawings} drawing(s).`)
+      this.log()
+      this.log(`Saved to ${result.filePath}`)
+
+      return {
+        drawings: result.drawings,
+        file: result.filePath,
+        format: 'markdown',
+        model: {modelId: match.ModelId, name: match.Name},
+        objects: result.objects,
+        relationships: result.relationships,
+      }
+    }
 
     this.log(`Exporting "${match.Name}"...`)
     this.log('Fetching objects, relationships, and drawings...')
@@ -347,6 +428,7 @@ export default class Export extends Command {
     return {
       drawings: result.drawings,
       file: result.filePath,
+      format: 'excel',
       model: {modelId: match.ModelId, name: match.Name},
       objects: result.objects,
       relationships: result.relationships,

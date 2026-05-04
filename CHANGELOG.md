@@ -5,6 +5,29 @@ All notable changes to orbusctl are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.9.0] - 2026-05-04
+
+### Added
+
+- Markdown export (`orbusctl export --format markdown`) with model metadata, statistics, per-diagram detail, object-diagram coverage, and audit sections.
+- Template-based Markdown export (`--template`) with `ORBUS-TABLE` and `ORBUS-DIAGRAM` directives, scope overrides, SVG embedding, and missing-asset warnings.
+- ID-based scripting flags for direct lookups: `--model-id`, `--object-id`, and `--drawing-id` across object, drawing, and export workflows.
+- `objects update` and `relationships update` commands for text attributes, plus `--set-choice` support for registry-backed Choice attributes such as RASCI and Access Operator.
+- `objects move` command with dry-run support, object movement, relationship recreation, and a saved JSON correlation table for follow-up copy/migration workflows.
+- API helpers for direct model/drawing fetches, object and relationship counts, object moves, relationship recreation, and attribute updates.
+
+### Changed
+
+- `createRelationship` now accepts arbitrary relationship attributes instead of only an `Alias` string, preserving custom relationship values during recreation.
+- `auth` now accepts tokens through `--token` only; the positional token argument was removed to keep scripted usage explicit.
+- README and CLAUDE.md now describe current behavior only, with version-by-version history kept in this changelog.
+
+### Fixed
+
+- RASCI template tables now read from the `RASCI` attribute instead of `Alias` and render compact codes such as `SC` and `RA`.
+
 ## [0.8.0] - 2026-05-03
 
 ### Added
@@ -89,6 +112,8 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Model listing with hierarchy tree, solution filtering, and detail counts
 - Persistent config at `~/.orbusctl/config.json`
 
+[Unreleased]: https://github.com/fgraciani/orbusctl/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/fgraciani/orbusctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/fgraciani/orbusctl/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/fgraciani/orbusctl/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/fgraciani/orbusctl/compare/v0.6.0...v0.6.1

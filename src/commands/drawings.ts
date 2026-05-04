@@ -1,6 +1,6 @@
 import {Command, Flags} from '@oclif/core'
 
-import {fetchDocumentTypes, fetchDrawingComponents, fetchDrawings, fetchModels, fetchObjectNameAndType} from '../api'
+import {fetchDocumentTypes, fetchDrawing, fetchDrawingComponents, fetchDrawings, fetchModel, fetchModels, fetchObjectNameAndType} from '../api'
 import {logError} from '../log'
 import {getShowHiddenModels, getSolutionFilter, getToken} from '../config'
 import {formatDrawingDetail, formatDrawingTable} from '../ui/drawings'
@@ -13,7 +13,9 @@ export default class Drawings extends Command {
 
   static flags = {
     drawing: Flags.string({char: 'd', description: 'Drawing name (partial match) — show components'}),
-    model: Flags.string({char: 'm', description: 'Model name (partial match)', required: true}),
+    'drawing-id': Flags.string({description: 'Drawing/Document ID (GUID) — use instead of --drawing'}),
+    model: Flags.string({char: 'm', description: 'Model name (partial match)'}),
+    'model-id': Flags.string({description: 'Model ID (GUID) — use instead of --model'}),
   }
 
   async run(): Promise<Record<string, unknown>> {
@@ -23,14 +25,80 @@ export default class Drawings extends Command {
       this.error('No token configured. Run "orbusctl auth" first.')
     }
 
-    const filter = getSolutionFilter()
-    const allModels = await fetchModels(token, filter)
-    const showHidden = getShowHiddenModels()
-    const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+    if (flags.model && flags['model-id']) {
+      this.error('Provide --model or --model-id, not both.')
+    }
+    if (!flags.model && !flags['model-id']) {
+      this.error('Provide --model (name) or --model-id (GUID).')
+    }
+    if (flags.drawing && flags['drawing-id']) {
+      this.error('Provide --drawing or --drawing-id, not both.')
+    }
 
-    const match = resolveMatch(models, flags.model, (m) => m.Name, 'model', (msg) => this.error(msg))
+    let match: {ModelId: string; Name: string}
+    if (flags['model-id']) {
+      match = await fetchModel(token, flags['model-id'])
+    } else {
+      const filter = getSolutionFilter()
+      const allModels = await fetchModels(token, filter)
+      const showHidden = getShowHiddenModels()
+      const models = showHidden ? allModels : allModels.filter((m) => !m.IsHidden)
+      match = resolveMatch(models, flags.model!, (m) => m.Name, 'model', (msg) => this.error(msg))
+    }
 
     this.log(`Fetching drawings for "${match.Name}"...`)
+
+    const modelRef = {modelId: match.ModelId, name: match.Name}
+
+    if (flags['drawing-id']) {
+      const drawingId = flags['drawing-id']
+      const [drawing, docTypes, components] = await Promise.all([
+        fetchDrawing(token, drawingId),
+        fetchDocumentTypes(token),
+        fetchDrawingComponents(token, drawingId),
+      ])
+
+      const typeMap = new Map(docTypes.map((t) => [t.DocumentTypeId, t.Name]))
+      const typeName = typeMap.get(drawing.DocumentTypeId) ?? 'Unknown'
+
+      this.log(`Fetching components for "${drawing.FileName}"...`)
+      this.log()
+
+      const objectComponents = components.filter((c) => !c.isRelationship)
+      const nameMap = new Map<string, {name: string; typeName: string}>()
+      await Promise.all(
+        objectComponents.map(async (c) => {
+          nameMap.set(c.ModelItemId, await fetchObjectNameAndType(token, c.ModelItemId))
+        }),
+      )
+      const enriched = components.map((c) => {
+        const info = nameMap.get(c.ModelItemId)
+        return {...c, objectName: info?.name ?? c.objectName, objectTypeName: info?.typeName ?? c.objectTypeName}
+      })
+
+      for (const line of formatDrawingDetail(drawing.FileName, typeName, drawing.DocumentAccessibilityCategory, enriched)) {
+        this.log(line)
+      }
+
+      const objects = enriched
+        .filter((c) => !c.isRelationship)
+        .map((c) => ({modelItemId: c.ModelItemId, name: c.objectName ?? 'Unknown', typeName: c.objectTypeName ?? 'Unknown'}))
+
+      const relationships = components
+        .filter((c) => c.isRelationship)
+        .map((c) => ({modelItemId: c.ModelItemId, kind: c.relationshipKind}))
+
+      return {
+        model: modelRef,
+        drawing: {
+          documentId: drawing.DocumentId,
+          name: drawing.FileName,
+          typeName,
+          accessibility: drawing.DocumentAccessibilityCategory,
+          components: {objects, relationships},
+        },
+      }
+    }
 
     const [docTypes, drawings] = await Promise.all([
       fetchDocumentTypes(token),
@@ -38,10 +106,9 @@ export default class Drawings extends Command {
     ])
 
     const typeMap = new Map(docTypes.map((t) => [t.DocumentTypeId, t.Name]))
-    const modelRef = {modelId: match.ModelId, name: match.Name}
 
     if (flags.drawing) {
-      const drawing = resolveMatch(drawings, flags.drawing!, (d) => d.FileName, 'drawing', (msg) => this.error(msg))
+      const drawing = resolveMatch(drawings, flags.drawing, (d) => d.FileName, 'drawing', (msg) => this.error(msg))
 
       this.log(`Fetching components for "${drawing.FileName}"...`)
       this.log()

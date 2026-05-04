@@ -29,7 +29,7 @@ interface WriteEntry {
 
 interface AuthEntry {
   event: 'save' | 'expired'
-  // Full token stored intentionally — for half-life analysis and account-misuse detection.
+  // Full token stored intentionally for local token-behavior analysis.
   token: string
   accountName: string
   userName: string

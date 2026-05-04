@@ -432,8 +432,56 @@ export async function fetchDrawings(token: string, modelId: string): Promise<Dra
   return all
 }
 
+export async function fetchModel(token: string, modelId: string): Promise<Model> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Models(${modelId})?$select=ModelId,Name,Description,IsHidden,BaselineModelId`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch model (HTTP ${response.status})`)
+  }
+
+  return (await response.json()) as Model
+}
+
+export async function fetchDrawing(token: string, documentId: string): Promise<Drawing> {
+  const response = await fetch(
+    `${BASE_URL}/odata/Documents(${documentId})?$select=DocumentId,FileName,DocumentTypeId,DocumentAccessibilityCategory`,
+    {headers: {Authorization: `Bearer ${token}`}},
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch drawing (HTTP ${response.status})`)
+  }
+
+  return (await response.json()) as Drawing
+}
+
 export async function fetchDrawingCount(token: string, modelId: string): Promise<number> {
   return fetchCount(token, 'Documents', modelId)
+}
+
+export async function fetchObjectCount(token: string, modelId: string): Promise<number> {
+  return fetchCount(token, 'Objects', modelId)
+}
+
+export async function fetchRelationshipCount(token: string, modelId: string): Promise<number> {
+  return fetchCount(token, 'Relationships', modelId)
+}
+
+export async function moveObjects(token: string, sourceObjectIds: string[], targetModelId: string): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Objects/Move`, {
+    body: JSON.stringify({SourceObjectIds: sourceObjectIds, TargetModelId: targetModelId}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to move objects (HTTP ${response.status})`)
+  }
+
+  return response.json()
 }
 
 export async function fetchDrawingComponents(token: string, documentId: string): Promise<DrawingComponent[]> {
@@ -568,14 +616,21 @@ export async function createObject(token: string, modelId: string, objectTypeId:
   return response.json()
 }
 
-export async function createRelationship(token: string, modelId: string, relationshipTypeId: string, leadId: string, memberId: string, alias?: string): Promise<unknown> {
+export async function createRelationship(
+  token: string,
+  modelId: string,
+  relationshipTypeId: string,
+  leadId: string,
+  memberId: string,
+  attributes?: Array<{attributeName: string; stringValue: string}>,
+): Promise<unknown> {
   const response = await fetch(`${BASE_URL}/odata/Relationships`, {
     body: JSON.stringify({
       modelId,
       relationshipTypeId,
       leadModelItemId: leadId,
       memberModelItemId: memberId,
-      ...(alias ? {attributeValues: [{attributeName: 'Alias', stringValue: alias}]} : {}),
+      ...(attributes && attributes.length > 0 ? {attributeValues: attributes} : {}),
     }),
     headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
     method: 'POST',
@@ -583,6 +638,62 @@ export async function createRelationship(token: string, modelId: string, relatio
 
   if (!response.ok) {
     throw new Error(`Failed to create relationship (HTTP ${response.status})`)
+  }
+
+  return response.json()
+}
+
+export async function updateObject(token: string, objectId: string, attributes: Record<string, string>): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Objects(${objectId})`, {
+    body: JSON.stringify({attributeValuesFlat: attributes}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to update object (HTTP ${response.status})`)
+  }
+
+  return response.json()
+}
+
+export async function updateRelationship(token: string, relationshipId: string, attributes: Record<string, string>): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Relationships(${relationshipId})`, {
+    body: JSON.stringify({attributeValuesFlat: attributes}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to update relationship (HTTP ${response.status})`)
+  }
+
+  return response.json()
+}
+
+export async function updateObjectAttributes(token: string, objectId: string, attributeValues: unknown[]): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Objects(${objectId})`, {
+    body: JSON.stringify({attributeValues}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to update object (HTTP ${response.status})`)
+  }
+
+  return response.json()
+}
+
+export async function updateRelationshipAttributes(token: string, relationshipId: string, attributeValues: unknown[]): Promise<unknown> {
+  const response = await fetch(`${BASE_URL}/odata/Relationships(${relationshipId})`, {
+    body: JSON.stringify({attributeValues}),
+    headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to update relationship (HTTP ${response.status})`)
   }
 
   return response.json()

@@ -48,7 +48,8 @@ export default class RelationshipsCreate extends Command {
 
     let result: Record<string, unknown>
     try {
-      result = await createRelationship(token, flags['model-id'], relationshipTypeId, flags['lead-id'], flags['member-id'], flags.alias) as Record<string, unknown>
+      const attributes = flags.alias ? [{attributeName: 'Alias', stringValue: flags.alias}] : undefined
+      result = await createRelationship(token, flags['model-id'], relationshipTypeId, flags['lead-id'], flags['member-id'], attributes) as Record<string, unknown>
     } catch (err) {
       logWrite({operation: 'createRelationship', modelId: flags['model-id'], params: {type: flags.type, relationshipTypeId, leadId: flags['lead-id'], memberId: flags['member-id'], alias: flags.alias}, success: false, error: (err as Error).message, user: getUser()})
       throw err
