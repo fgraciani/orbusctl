@@ -1,6 +1,6 @@
 {
   "name": "orbusctl",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "TUI and CLI for Orbus Infinity (iServer365) — model browsing, audit, activity, export, and write operations for EA teams, architects, and agents",
   "bin": { "orbusctl": "dist/main.js" },
   "main": "dist/main.js",
@@ -9,7 +9,6 @@
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
     "build": "tsc",
-    "prepare": "tsc",
     "clean": "rm -rf dist"
   },
   "dependencies": {
