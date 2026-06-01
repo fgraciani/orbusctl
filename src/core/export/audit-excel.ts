@@ -29,12 +29,40 @@ function styleHeader(ws: ExcelJS.Worksheet): void {
   row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2B5797' } };
 }
 
-function sheetName(name: string): string {
-  return name.replace(/[\\/?*[\]:]/g, '-').slice(0, 31);
+function buildSheetNameMap(names: string[]): Map<string, string> {
+  const MAX = 31;
+
+  function sanitizeAndFit(name: string): string {
+    const s = name.replace(/[\\/?*[\]:]/g, '-');
+    if (s.length <= MAX) return s;
+    const tail = 12;
+    return s.slice(0, MAX - tail - 1) + '…' + s.slice(-tail);
+  }
+
+  const seen = new Map<string, number>();
+  const pairs: [string, string][] = names.map(n => {
+    const c = sanitizeAndFit(n);
+    seen.set(c, (seen.get(c) ?? 0) + 1);
+    return [n, c];
+  });
+
+  const counters = new Map<string, number>();
+  const result = new Map<string, string>();
+  for (const [name, candidate] of pairs) {
+    if ((seen.get(candidate) ?? 0) > 1) {
+      const idx = (counters.get(candidate) ?? 0) + 1;
+      counters.set(candidate, idx);
+      const suffix = `~${idx}`;
+      result.set(name, candidate.slice(0, MAX - suffix.length) + suffix);
+    } else {
+      result.set(name, candidate);
+    }
+  }
+  return result;
 }
 
-function addIssueSheet(wb: ExcelJS.Workbook, summary: AuditSummary): void {
-  const ws = wb.addWorksheet(sheetName(summary.modelName));
+function addIssueSheet(wb: ExcelJS.Workbook, summary: AuditSummary, tabName: string): void {
+  const ws = wb.addWorksheet(tabName);
   ws.columns = [
     { header: 'Object Name', width: 35 },
     { header: 'Object Type', width: 25 },
@@ -62,9 +90,11 @@ export async function performAuditExcelExport(
 ): Promise<AuditExportResult> {
   const wb = new ExcelJS.Workbook();
 
+  const sheetNames = buildSheetNameMap(summaries.map(s => s.modelName));
+
   if (summaries.length === 1) {
     onProgress?.({ phase: 'Writing sheet...' });
-    addIssueSheet(wb, summaries[0]);
+    addIssueSheet(wb, summaries[0], sheetNames.get(summaries[0].modelName)!);
   } else {
     onProgress?.({ phase: 'Building summary...' });
     const wsSummary = wb.addWorksheet('Summary');
@@ -98,7 +128,7 @@ export async function performAuditExcelExport(
 
     for (let i = 0; i < summaries.length; i++) {
       onProgress?.({ phase: `Writing ${summaries[i].modelName}...`, current: i + 1, total: summaries.length });
-      addIssueSheet(wb, summaries[i]);
+      addIssueSheet(wb, summaries[i], sheetNames.get(summaries[i].modelName)!);
     }
   }
 

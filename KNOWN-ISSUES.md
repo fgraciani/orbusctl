@@ -2,6 +2,12 @@
 
 Current limitations and workarounds as of v1.0.0.
 
+## ~~`orbusctl` command not found after `npm install -g`~~ — fixed in v1.0.1
+
+Installing from GitHub (`npm install -g github:fgraciani/orbusctl`) completed without errors but the `orbusctl` binary was not available. The `dist/` folder is not committed to the repo, and without a `prepare` script npm did not build the TypeScript after install.
+
+**Fix:** Added `"prepare": "tsc"` to `package.json` so npm automatically compiles on install.
+
 ## Orbus API limitations
 
 ### Relationship date filtering is client-side only
@@ -36,6 +42,19 @@ A few API call sites silently return fallback values instead of surfacing errors
 - Some audit and export detail-fetching loops silently skip failed objects
 
 These are intentional graceful degradation — the tool continues working with partial data rather than aborting. If an object consistently shows as "Unknown", the underlying API call is failing (likely a permissions or deleted-object issue).
+
+## Audit — no recovery after token expiry mid-scan
+
+When running a full audit (all models) from the TUI, if the token expires during the scan, the audit continues silently — failed API calls fall back to empty results rather than surfacing a token error. Once a fresh token is provided, there is no way to resume or re-scan only the models that failed; a full restart is required.
+
+**Impact:** Partial audit results can be exported, and the export shows which models were scanned. However, there is no way to resume from where scanning stopped — a full restart is required to get complete results. A full multi-model audit on large instances can take long enough to reliably hit this.
+
+**Workaround:** Export the partial results to see which models completed, refresh the token, then re-run a targeted single-model audit for any models that were not yet scanned.
+
+**Design options to consider:**
+- Detect 401 responses during the scan loop and pause with a "token expired — refresh and resume" prompt, then re-scan from the failed model.
+- Track which models completed successfully and offer a "resume scan" action after re-authentication.
+- Surface a warning banner on the audit results screen if any models were scanned while the heartbeat was in a failed state.
 
 ## Choice attribute IDs are hardcoded
 

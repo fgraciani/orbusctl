@@ -32,8 +32,36 @@ function styleHeader(ws: ExcelJS.Worksheet): void {
   row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2B5797' } };
 }
 
-function sheetName(name: string): string {
-  return name.replace(/[\\/?*[\]:]/g, '-').slice(0, 31);
+function buildSheetNameMap(names: string[]): Map<string, string> {
+  const MAX = 31;
+
+  function sanitizeAndFit(name: string): string {
+    const s = name.replace(/[\\/?*[\]:]/g, '-');
+    if (s.length <= MAX) return s;
+    const tail = 12;
+    return s.slice(0, MAX - tail - 1) + '…' + s.slice(-tail);
+  }
+
+  const seen = new Map<string, number>();
+  const pairs: [string, string][] = names.map(n => {
+    const c = sanitizeAndFit(n);
+    seen.set(c, (seen.get(c) ?? 0) + 1);
+    return [n, c];
+  });
+
+  const counters = new Map<string, number>();
+  const result = new Map<string, string>();
+  for (const [name, candidate] of pairs) {
+    if ((seen.get(candidate) ?? 0) > 1) {
+      const idx = (counters.get(candidate) ?? 0) + 1;
+      counters.set(candidate, idx);
+      const suffix = `~${idx}`;
+      result.set(name, candidate.slice(0, MAX - suffix.length) + suffix);
+    } else {
+      result.set(name, candidate);
+    }
+  }
+  return result;
 }
 
 function uniqueUsers(model: ModelActivity): string {
@@ -66,11 +94,13 @@ export async function performActivityExcelExport(
 
   let entryCount = 0;
 
+  const sheetNames = buildSheetNameMap(report.models.map(m => m.modelName));
+
   for (let i = 0; i < report.models.length; i++) {
     const m = report.models[i];
     onProgress?.({ phase: 'Writing details...', current: i + 1, total: report.models.length });
 
-    const ws = wb.addWorksheet(sheetName(m.modelName));
+    const ws = wb.addWorksheet(sheetNames.get(m.modelName)!);
     ws.columns = [
       { header: 'Action', width: 10 },
       { header: 'Name', width: 35 },
