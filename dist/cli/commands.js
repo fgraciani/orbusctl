@@ -1,0 +1,18 @@
+export const COMMAND_LIST = [
+    { name: 'auth', description: 'Save authentication token' },
+    { name: 'models', description: 'List models' },
+    { name: 'objects', description: 'List or inspect objects in a model' },
+    { name: 'drawings', description: 'List or inspect drawings in a model' },
+    { name: 'export', description: 'Export a model to Excel or Markdown' },
+    { name: 'activity', description: 'Show recent activity across models' },
+    { name: 'config', description: 'Show current configuration' },
+    { name: 'version', description: 'Show version' },
+    { name: 'doc', description: 'Document generation and management' },
+    { name: 'objects-create', description: 'Create an object in a model' },
+    { name: 'objects-update', description: 'Update object attributes' },
+    { name: 'objects-move', description: 'Move objects between models' },
+    { name: 'relationships-create', description: 'Create a relationship' },
+    { name: 'relationships-update', description: 'Update relationship attributes' },
+    { name: 'objects-delete', description: 'Delete an object by ID' },
+    { name: 'relationships-delete', description: 'Delete a relationship by ID' },
+];

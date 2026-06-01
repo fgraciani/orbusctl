@@ -7,6 +7,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-01
+
+### Fixed
+
+- **Global install — build fails in npm temp directory:** `npm install -g github:fgraciani/orbusctl` failed during the `prepare` step because npm runs `tsc` in a temp clone directory where `node_modules` are not accessible. Fixed by committing `dist/` to the repository and removing the `prepare` script — no build step required at install time.
+
 ## [1.0.1] - 2026-06-01
 
 ### Fixed
