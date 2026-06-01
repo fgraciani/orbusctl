@@ -7,6 +7,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-01
+
+### Fixed
+
+- **Global install — dist/ missing from installed package:** npm's git dependency handler was serving stale clones that lacked the `dist/` directory. Added explicit `"files": ["dist/"]` to `package.json` so npm always includes the compiled output.
+
 ## [1.0.2] - 2026-06-01
 
 ### Fixed
