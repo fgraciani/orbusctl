@@ -7,6 +7,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.1] - Unreleased
+
+### Fixed
+
+- **Excel export — worksheet name collisions:** Activity and Audit multi-model exports threw `"Worksheet name already exists"` when model names shared a long common prefix and differed only at the end (e.g. release wave suffix). Replaced the naive 31-char slice with a collision-aware `buildSheetNameMap()` that ellipsis-truncates long names preserving both the start and end (`Prefix…Wave 3`), with a `~N` numeric fallback for any remaining collisions.
+
 ## [1.0.0] - 2026-05-31
 
 ### Added
