@@ -9,6 +9,7 @@
     "start": "node dist/main.js",
     "dev": "tsx src/main.ts",
     "build": "tsc",
+    "prepare": "tsc",
     "clean": "rm -rf dist"
   },
   "dependencies": {
