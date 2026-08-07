@@ -11,8 +11,12 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **`--set-date` flag on `objects-update`:** sets datetime attributes (e.g. lifecycle dates) via the `updateObjectAttributes()` API path, accepting `Name=YYYY-MM-DD` and building the `Datetime` attribute value payload. Previously only `Text` and `Choice` categories were supported through this path, and datetime writes via `--set` returned HTTP 422 through the flat attribute path.
+- **`--set-date` flag on `objects-update`:** sets datetime attributes (e.g. lifecycle dates) via the `updateObjectAttributes()` API path, accepting `Name=YYYY-MM-DD` and building the `DateTime` attribute value payload. Previously only `Text` and `Choice` categories were supported through this path, and datetime writes via `--set` returned HTTP 422 through the flat attribute path.
 - **Standards Class and Lifecycle Status choice attributes:** added to the choice attribute map (`choice-maps.ts`) alongside RASCI and Access Operator, enabling `--set-choice "Standards Class=Standard"` for the Technology Portfolio Core Pack Power BI dashboards. Lifecycle Status option IDs are not yet known and are left empty pending manual discovery.
+
+### Fixed
+
+- **`--set-date` — HTTP 500 on write:** the `attributeCategory` sent for datetime attributes must be `DateTime` (capital T), not `Datetime` — the OData API is case-sensitive on this value. Discovered during manual testing against `[TEST] NM Admins`.
 
 ## [1.0.3] - 2026-06-01
 
