@@ -18,16 +18,18 @@ export function registerObjectsUpdateCommand(program: Command): void {
     .requiredOption('--object-id <guid>', 'Object ID to update')
     .option('--set <pair>', 'Text attribute as Key=Value (repeatable)', collect, [] as string[])
     .option('--set-choice <pair>', 'Choice attribute as Name=Val1,Val2 (repeatable) — note: most choice attributes (RASCI, Access Operator) are on relationships, not objects', collect, [] as string[])
+    .option('--set-date <pair>', 'Datetime attribute as Name=YYYY-MM-DD (repeatable)', collect, [] as string[])
     .requiredOption('--password <pw>', 'Write password')
     .option('--json', 'Output as JSON')
     .option('--force', 'Skip token age warning')
-    .action(async (opts: { objectId: string; set: string[]; setChoice: string[]; password: string; json?: boolean; force?: boolean }) => {
+    .action(async (opts: { objectId: string; set: string[]; setChoice: string[]; setDate: string[]; password: string; json?: boolean; force?: boolean }) => {
       const json = opts.json ?? false;
       const sets: string[] = opts.set ?? [];
       const setChoices: string[] = opts.setChoice ?? [];
+      const setDates: string[] = opts.setDate ?? [];
 
-      if (sets.length === 0 && setChoices.length === 0) {
-        process.stderr.write('Error: At least one of --set or --set-choice is required.\n');
+      if (sets.length === 0 && setChoices.length === 0 && setDates.length === 0) {
+        process.stderr.write('Error: At least one of --set, --set-choice, or --set-date is required.\n');
         process.exit(1);
       }
 
@@ -39,8 +41,8 @@ export function registerObjectsUpdateCommand(program: Command): void {
       let attributeValues: unknown[] | undefined;
 
       try {
-        if (setChoices.length > 0) {
-          attributeValues = buildMixedAttributeValues(sets, setChoices);
+        if (setChoices.length > 0 || setDates.length > 0) {
+          attributeValues = buildMixedAttributeValues(sets, setChoices, setDates);
         } else {
           attributes = parseSetFlags(sets);
         }
@@ -56,7 +58,7 @@ export function registerObjectsUpdateCommand(program: Command): void {
           await updateObjectFlat(token, opts.objectId, attributes!);
         }
 
-        logWrite({ operation: 'update-object', objectId: opts.objectId, params: { set: sets, setChoice: setChoices }, success: true, user: getUser()?.name });
+        logWrite({ operation: 'update-object', objectId: opts.objectId, params: { set: sets, setChoice: setChoices, setDate: setDates }, success: true, user: getUser()?.name });
 
         if (json) {
           process.stdout.write(JSON.stringify({ objectId: opts.objectId, attributes: attributes ?? attributeValues }, null, 2) + '\n');
@@ -70,9 +72,13 @@ export function registerObjectsUpdateCommand(program: Command): void {
             const eq = pair.indexOf('=');
             process.stdout.write(`  ${pair.slice(0, eq)} = ${pair.slice(eq + 1)}\n`);
           }
+          for (const pair of setDates) {
+            const eq = pair.indexOf('=');
+            process.stdout.write(`  ${pair.slice(0, eq)} = ${pair.slice(eq + 1)}\n`);
+          }
         }
       } catch (err) {
-        logWrite({ operation: 'update-object', objectId: opts.objectId, params: { set: sets, setChoice: setChoices }, success: false, error: err instanceof Error ? err.message : String(err), user: getUser()?.name });
+        logWrite({ operation: 'update-object', objectId: opts.objectId, params: { set: sets, setChoice: setChoices, setDate: setDates }, success: false, error: err instanceof Error ? err.message : String(err), user: getUser()?.name });
         handleError(err, json);
         process.exit(1);
       }

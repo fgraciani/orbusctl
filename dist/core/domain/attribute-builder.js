@@ -29,7 +29,25 @@ export function parseSetChoiceFlags(setChoices) {
     }
     return result;
 }
-export function buildMixedAttributeValues(sets, setChoices) {
+export function parseSetDateFlags(setDates) {
+    const result = [];
+    for (const pair of setDates) {
+        const eq = pair.indexOf('=');
+        if (eq < 1)
+            throw new Error(`Invalid --set-date value "${pair}": expected Name=YYYY-MM-DD`);
+        const name = pair.slice(0, eq);
+        const raw = pair.slice(eq + 1);
+        // Accept YYYY-MM-DD, append T00:00:00Z for API
+        const iso = raw.includes('T') ? raw : `${raw}T00:00:00Z`;
+        result.push({
+            attributeName: name,
+            attributeCategory: 'Datetime',
+            dateTimeValue: iso,
+        });
+    }
+    return result;
+}
+export function buildMixedAttributeValues(sets, setChoices, setDates = []) {
     const result = [];
     for (const pair of sets) {
         const eq = pair.indexOf('=');
@@ -42,5 +60,6 @@ export function buildMixedAttributeValues(sets, setChoices) {
         });
     }
     result.push(...parseSetChoiceFlags(setChoices));
+    result.push(...parseSetDateFlags(setDates));
     return result;
 }

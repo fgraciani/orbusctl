@@ -18,6 +18,21 @@ const CHOICE_ATTRIBUTES = {
             'Update': { id: '4ee726ec-e356-ef11-991a-000d3a38a5d9', description: 'Access reads and updates related element' },
         },
     },
+    'Standards Class': {
+        attributeId: '3f29a397-2fef-e811-9f2b-00155d26bcf8',
+        options: {
+            'Non-Standard': { id: '4529a397-2fef-e811-9f2b-00155d26bcf8', description: 'Non-Standard (inferred ID, unconfirmed)' },
+            'Proposed Standard': { id: '4629a397-2fef-e811-9f2b-00155d26bcf8', description: 'Proposed Standard (inferred ID, unconfirmed)' },
+            'Provisional Standard': { id: '4729a397-2fef-e811-9f2b-00155d26bcf8', description: 'Provisional Standard' },
+            'Standard': { id: '4829a397-2fef-e811-9f2b-00155d26bcf8', description: 'Standard' },
+            'Phasing-Out Standard': { id: '4929a397-2fef-e811-9f2b-00155d26bcf8', description: 'Phasing-Out Standard' },
+            'Retired Standard': { id: '4a29a397-2fef-e811-9f2b-00155d26bcf8', description: 'Retired Standard (inferred ID, unconfirmed)' },
+        },
+    },
+    'Lifecycle Status': {
+        attributeId: 'c028a397-2fef-e811-9f2b-00155d26bcf8',
+        options: {},
+    },
 };
 export function resolveChoiceAttribute(name) {
     return CHOICE_ATTRIBUTES[name];

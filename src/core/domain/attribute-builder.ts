@@ -2,10 +2,11 @@ import { resolveChoiceValues } from './choice-maps.js';
 
 export interface ParsedAttribute {
   attributeName: string;
-  attributeCategory: 'Text' | 'Choice';
+  attributeCategory: 'Text' | 'Choice' | 'Datetime';
   textValue?: { plainText: string; richText: null };
   choiceValues?: Array<{ attributeConfigurationChoiceId: string }>;
   attributeConfigurationId?: string;
+  dateTimeValue?: string;  // ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ
 }
 
 export function parseSetFlags(sets: string[]): Record<string, string> {
@@ -37,7 +38,29 @@ export function parseSetChoiceFlags(setChoices: string[]): ParsedAttribute[] {
   return result;
 }
 
-export function buildMixedAttributeValues(sets: string[], setChoices: string[]): ParsedAttribute[] {
+export function parseSetDateFlags(setDates: string[]): ParsedAttribute[] {
+  const result: ParsedAttribute[] = [];
+  for (const pair of setDates) {
+    const eq = pair.indexOf('=');
+    if (eq < 1) throw new Error(`Invalid --set-date value "${pair}": expected Name=YYYY-MM-DD`);
+    const name = pair.slice(0, eq);
+    const raw = pair.slice(eq + 1);
+    // Accept YYYY-MM-DD, append T00:00:00Z for API
+    const iso = raw.includes('T') ? raw : `${raw}T00:00:00Z`;
+    result.push({
+      attributeName: name,
+      attributeCategory: 'Datetime',
+      dateTimeValue: iso,
+    });
+  }
+  return result;
+}
+
+export function buildMixedAttributeValues(
+  sets: string[],
+  setChoices: string[],
+  setDates: string[] = [],
+): ParsedAttribute[] {
   const result: ParsedAttribute[] = [];
 
   for (const pair of sets) {
@@ -51,5 +74,6 @@ export function buildMixedAttributeValues(sets: string[], setChoices: string[]):
   }
 
   result.push(...parseSetChoiceFlags(setChoices));
+  result.push(...parseSetDateFlags(setDates));
   return result;
 }
