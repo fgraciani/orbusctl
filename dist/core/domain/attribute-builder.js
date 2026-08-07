@@ -41,7 +41,7 @@ export function parseSetDateFlags(setDates) {
         const iso = raw.includes('T') ? raw : `${raw}T00:00:00Z`;
         result.push({
             attributeName: name,
-            attributeCategory: 'Datetime',
+            attributeCategory: 'DateTime',
             dateTimeValue: iso,
         });
     }

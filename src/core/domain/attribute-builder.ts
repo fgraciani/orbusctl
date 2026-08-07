@@ -2,11 +2,12 @@ import { resolveChoiceValues } from './choice-maps.js';
 
 export interface ParsedAttribute {
   attributeName: string;
-  attributeCategory: 'Text' | 'Choice' | 'Datetime';
+  attributeCategory: 'Text' | 'Choice' | 'DateTime';
   textValue?: { plainText: string; richText: null };
   choiceValues?: Array<{ attributeConfigurationChoiceId: string }>;
   attributeConfigurationId?: string;
-  dateTimeValue?: string;  // ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ
+  dateTimeValue?: string;
+  value?: string;
 }
 
 export function parseSetFlags(sets: string[]): Record<string, string> {
@@ -49,7 +50,7 @@ export function parseSetDateFlags(setDates: string[]): ParsedAttribute[] {
     const iso = raw.includes('T') ? raw : `${raw}T00:00:00Z`;
     result.push({
       attributeName: name,
-      attributeCategory: 'Datetime',
+      attributeCategory: 'DateTime',
       dateTimeValue: iso,
     });
   }
